@@ -2,14 +2,14 @@
 # license
 # edna fire project directory
 
-## scripts
-analysis scripts go here
+## /scripts
+directory for analysis scripts go here
 
-# data
-small datasets go here
+# /data
+directory small datasets go here
 
-# output
-save intermediary files and output
+# /output
+directory to save intermediary files and output
 
-# figures
-figure drafts and final figures
+# /figures
+directory for figure drafts and final figures
