@@ -1,0 +1,197 @@
+---
+title: "Holmquist - DADA2"
+output: github_document
+---
+
+```{r libraries}
+# https://vbaliga.github.io/verify-that-r-packages-are-installed-and-loaded/
+# for the sake reproducibilty  
+
+packages <- c("dada2", "tidyverse", "reshape2", "stringr")
+package.check <- lapply(
+  packages,
+  FUN = function(x) {
+    if (!require(x, character.only = T)) {
+      install.packages(x, dependencies = T)
+      library(x, character.only = T)
+    }
+  }
+)
+rm(packages,package.check)
+```
+
+All reads associated with a gene, trimmed of primers, should be in a directory. Trimming of primers can be done in DADA2 but ideally is done using CutAdapt or another tool. If sequencing files contain multiple amplicons, adapter trimming must be done outside of R. Set the location variable to the directory containing the files. If you sequenced multiple genes and would like to add an identifier to file names associated with the amplicon being processed, change the amplicon variable to this.
+```{r}
+# Confirm you are working in the correct directory in your chunks
+getwd()
+
+# Change
+location <- "trimmed_reads/mco/"
+
+# Change
+amplicon <- "mco"
+```
+
+Create lists of R1 and R2 files as well as create lists of new files that will be produced following filtering.
+```{r}
+# First check that there are an equal number of R1 and R2 files in the directory.
+# If there are not, notify and list the missing files.
+setwd("D:/Research/rprojects/fire_project")
+
+if(length(list.files(path = location, pattern = paste("_R1"), full.names = T)) != 
+   length(list.files(path = location, pattern = paste("_R2"), full.names = T))) {
+  
+        print("Number of R1 files does not equal number of R2 files. 
+              May be a result of differing file naming scheme. Please address before continuing.")
+  
+        f_names <- sapply(str_split(basename(list.files(path = location, 
+                                                        pattern = paste("_R1"), 
+                                                        full.names = T)), "_R1"), '[', 1)
+        r_names <- sapply(str_split(basename(list.files(path = location, 
+                                                        pattern = paste("_R2"), 
+                                                        full.names = T)), "_R2"), '[', 1)
+        
+        print(paste0("Missing from R2: ", f_names[!f_names %in% r_names]))
+        print(paste0("Missing from R1: ", r_names[!r_names %in% f_names]))
+        rm(f_names, r_names)
+
+# If R1 == R2, continue on to the following steps
+   } else {
+     
+  # Create lists of all files in the directory
+  sort(list.files(path = location, pattern = paste("_R1"), full.names = T)) -> files_fwd
+  sort(list.files(path = location, pattern = paste("_R2"), full.names = T)) -> files_rev
+
+  # Create a list of sample names, taken from file names
+  sample_names <- sapply(str_split(basename(files_fwd), "_L001"), '[', 1)
+
+  # Create file names for files following filtering steps. Include the amplicon name
+  # in file name to make clear in folders. If you want filtered files to be stored in a 
+  # directory other than your "location" directory, change the file.path below.
+  filt_fwd <- file.path(paste0(location, "filtered"), paste0(sample_names, "_F_filt_", amplicon, ".fastq.gz"))
+  filt_rev <- file.path(paste0(location, "filtered"), paste0(sample_names, "_R_filt_", amplicon, ".fastq.gz"))
+   }
+
+```
+
+Check the quality profiles of reads and determine desired parameterization for the filterAndTrim() function in DADA2. If you receive errors when checking quality profiles, files may be empty. However, empty files will not cause problems in future steps as they are removed in filtering.
+```{r}
+setwd("D:/Research/rprojects/fire_project")
+
+# Produce quality profiles. Change values to view others. Where quality drops 
+# is advisable for trunucation but ensure paired reads will still overlap. 
+# plotQualityProfile(files_fwd[1:2])
+# plotQualityProfile(files_rev[1:2])
+
+# Filter and trim reads. Additional arguments can be defined. These can be dictated for forward
+# and reverse separately using c()
+filter_out <- filterAndTrim(files_fwd, filt_fwd, files_rev, filt_rev,
+              # If you choose to not compress files, remove .gz from filter file names in previous chunk
+              compress = T,
+              # Opted to use minimum length instead because many reads were below this, but did not want
+              # to truncate the longer reads to 200
+              truncLen = c(240, 220),
+              # For paired-read filtering, match ID lines between forward and reverse
+              matchIDs = T, 
+              # Prints results as proceeds. Can be helpful in case adjusting of filtering parameters is necessary.
+              verbose = T,
+              # Truncates at first instance of quality score <= value
+              truncQ = 2,
+              # Discared reads following filtering that have a quality score less than value 
+              minQ = 3) # Save results to calculate reads through pipeline when completed
+
+# Actual files in "filtered" versus the list of files will differ because some files will generate zero reads. 
+# Reset the filt_fwd and filt_rev to reflect the files which actually exist. 
+  sort(list.files(path = paste0(location, "filtered"), pattern = paste("_F_filt"), full.names = T)) -> filt_fwd
+  sort(list.files(path = paste0(location, "filtered"), pattern = paste("_R_filt"), full.names = T)) -> filt_rev
+        
+```
+
+Run DADA2
+```{r}
+setwd("D:/Research/rprojects/fire_project")
+
+derepFastq(filt_fwd, verbose = F) -> derep_fwd
+derepFastq(filt_rev, verbose = F) -> derep_rev
+
+learnErrors(derep_fwd, multithread = F) -> error_fwd
+learnErrors(derep_rev, multithread = F) -> error_rev
+
+dada(derep_fwd, error_fwd, multithread = F) -> dada_fwd
+dada(derep_rev, error_rev, multithread = F) -> dada_rev
+
+mergePairs(dada_fwd, derep_fwd, dada_rev, derep_rev) -> merged
+
+makeSequenceTable(merged) -> seqtable
+
+removeBimeraDenovo(seqtable) -> table_final
+
+save.image("mco_dada2.RData")
+```
+
+Edit produced tables
+```{r}
+# Remove the file name
+name_split <- sub("_F_filt_mco.fastq.gz$", "",
+                 basename(rownames(table_final)))
+name_split <- sub("_S[0-9]*$", "", namesplit)
+name_split <- sub("-", ".", name_split)
+
+# Relabel the rows
+rownames(table_final) <- name_split
+
+# Trim length of sequences to expected size
+  # Look at distribution of lengths
+  table(nchar(getSequences(table_final))) # View distributions of length
+  # Trim; same as first run in terms of lengths (rRNA expected to have more variable lengths)
+  table_final <- table_final[,nchar(colnames(table_final)) %in% 312:313]
+  
+```
+
+Track reads through the pipeline. There should be no step in which a large number of reads are lost, except fitlering potentially if you choose to be conservative. 
+```{r}
+cbind(sum(filter_out[,1]), sum(filter_out[,2]), sum(seqtable), sum(table_final), length(getSequences(table_final))) -> tracking
+rownames(tracking) <- amplicon
+colnames(tracking) <- c("Input reads", "Filtered", "Output reads", "Trimmed", "Total ASVs")
+# Write to a csv 
+write.csv(tracking, paste0("tracking_", amplicon, ".csv"))
+```
+
+Write to files  
+```{r}
+# Create a fasta file with ASVs and associated sequences
+  getUniques(table_final) %>%
+      uniquesToFasta(paste0("asv_",amplicon,".fasta"), 
+                     ids = paste("ASV", amplicon, 
+                                 seq(length(getSequences(table_final))), sep = "_"))
+
+# Save a table of counts with sample X numbered ASV
+  counts_final <- table_final
+  colnames(counts_final) <- paste("ASV", amplicon, seq(length(getSequences(table_final))), sep = "_")
+  t(table_final) -> counts_final
+  write.csv(counts_final, paste0("counts_", amplicon, ".csv"))
+
+# Create a dataframe
+  # Generate ASVs, and associated read abundance
+  getUniques(table_final) %>%
+        data.frame() %>%
+        tibble::rownames_to_column() -> df1
+  df1[3] <- paste("ASV", amplicon, seq(length(getSequences(table_final))), sep = "_")
+  colnames(df1) <- c("seq", "asv_size", "asv")
+
+  # Take count data for each sample and create a dataframe
+  melt(counts_final) %>%
+    filter(value > 0) -> df2
+  colnames(df2) <- c("seq", "sample", "count")
+
+  # Merge the two data frames to create a dataframe with sample, asv, sequence,
+  # read count for sample, and read depth for ASV. Additionally, add column for 
+  # amplicon. This is for datasets with multiple genes in which you may want to 
+  # create a master DF with all amplicons. 
+  right_join(df1, df2, by = "seq") -> df
+  df$marker <- amplicon
+  
+  # Write to a csv
+  write.csv(df, paste0("df_", amplicon, ".csv"))
+ 
+```
