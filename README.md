@@ -77,3 +77,56 @@ docker images biocontainers_dada2_tidyverse
 # REPOSITORY                      TAG       IMAGE ID       CREATED         SIZE
 # biocontainers_dada2_tidyverse   latest    c1f8a711f890   6 minutes ago   1.18GB
 ```
+
+Download base container.
+```bash
+docker pull quay.io/biocontainers/bioconductor-dada2:1.22.0--r41h619a076_1
+docker run -it quay.io/biocontainers/bioconductor-dada2:1.22.0--r41h619a076_1 /bin/bash
+```
+
+
+Download base container.
+```bash
+docker pull rocker/tidyverse
+docker run -it rocker/tidyverse /bin/bash
+```
+# inside container start an R session
+
+```R
+install.packages("ape")
+install.packages("vegan")
+install.packages("BAT")
+sessionInfo(package = NULL)
+
+# R version 4.2.1 (2022-06-23)
+# Platform: x86_64-pc-linux-gnu (64-bit)
+# Running under: Ubuntu 20.04.4 LTS
+#
+# Matrix products: default
+# BLAS:   /usr/lib/x86_64-linux-gnu/openblas-pthread/libblas.so.3
+# LAPACK: /usr/lib/x86_64-linux-gnu/openblas-pthread/liblapack.so.3
+#
+# locale:
+#  [1] LC_CTYPE=en_US.UTF-8       LC_NUMERIC=C
+#  [3] LC_TIME=en_US.UTF-8        LC_COLLATE=en_US.UTF-8
+#  [5] LC_MONETARY=en_US.UTF-8    LC_MESSAGES=en_US.UTF-8
+#  [7] LC_PAPER=en_US.UTF-8       LC_NAME=C
+#  [9] LC_ADDRESS=C               LC_TELEPHONE=C
+# [11] LC_MEASUREMENT=en_US.UTF-8 LC_IDENTIFICATION=C
+#
+# attached base packages:
+# [1] stats     graphics  grDevices utils     datasets  methods   base
+#
+# loaded via a namespace (and not attached):
+# [1] compiler_4.2.1 tools_4.2.1
+
+
+```
+
+Outside of container.
+```bash
+docker commit trusting_wilson rocker_tidyverse_ape_vegan_bat
+docker images
+# REPOSITORY                                 TAG                     IMAGE ID       CREATED          SIZE
+# rocker_tidyverse_ape_vegan_bat             latest                  afd3d3390eb3   31 seconds ago   2.46GB
+```
