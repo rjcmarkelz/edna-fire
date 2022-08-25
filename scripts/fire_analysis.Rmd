@@ -1,0 +1,928 @@
+---
+title: "fire_analysis"
+author: "Anna J Holmquist"
+date: "`r Sys.Date()`"
+output: 
+  html_document:
+    df_print: kable
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r libraries}
+
+library(tidyverse)
+library(reshape2)
+library(ape)
+library(vegan)
+library(BAT)
+
+```
+
+```{r data}
+
+df_final <- 
+  read.csv("df_final_v1.csv") %>%
+  filter(!is.na(order))
+
+```
+
+```{r seq summary table}
+
+# From DADA2, created "tracking" tables for reads as they went through
+# the pipeline. Reading in these .csv to create summary sequencing table
+track_bf3 <- read.csv("dada2_products/tracking_bf3.csv")
+track_mco <- read.csv("dada2_products/tracking_mco.csv")
+track <- rbind(track_bf3, track_mco)
+
+# Following filtering
+total_tracking <- 
+  df_final %>%
+  group_by(marker) %>%
+  summarise(reads = sum(count),
+            asv = n_distinct(asv), 
+            otu = n_distinct(otu)) %>%
+  cbind(track) %>%
+  select(-X) %>%
+  rename(filtered_reads = reads,
+         filtered_asvs = asv,
+         input = Input.reads,
+         dada2_qc = Filtered,
+         output = Output.reads,
+         length_trim = Trimmed,
+         dada2_asv = Total.ASVs) %>%
+  select(marker, input, dada2_qc:length_trim, filtered_reads, 
+         dada2_asv, filtered_asvs, otu)
+
+knitr::kable(total_tracking)
+
+# Only MCO
+mco_tracking <- 
+  df_final %>%
+  filter(marker == "mco") %>%
+  group_by(marker) %>%
+  summarise(reads = sum(count),
+            asv = n_distinct(asv), 
+            otu = n_distinct(otu)) %>%
+  cbind(track_mco) %>%
+  select(-X) %>%
+  rename(filtered_reads = reads,
+         filtered_asvs = asv,
+         input = Input.reads,
+         dada2_qc = Filtered,
+         output = Output.reads,
+         length_trim = Trimmed,
+         dada2_asv = Total.ASVs) %>%
+  select(marker, input, dada2_qc:length_trim, filtered_reads, 
+         dada2_asv, filtered_asvs, otu)
+```
+
+```{r taxonomy summary}
+
+df_final %>%
+  filter(marker == "mco") %>%
+  summarise(fam = n_distinct(family),
+            gen = n_distinct(genus),
+            sp = n_distinct(species),
+            order = n_distinct(order))
+
+
+# Figure
+df_final %>%
+  filter(marker == "mco" & !is.na(HABITAT)) %>%
+  group_by(year, HABITAT, status) %>%
+  summarise(fam = n_distinct(family),
+            gen = n_distinct(genus),
+            order = n_distinct(order)) %>%
+  ggplot(aes(HABITAT, order)) +
+  geom_bar(aes(fill = status), stat = "identity", position = "dodge") +
+  theme_minimal() +
+  labs(title = "Order")
+
+df_final %>%
+  filter(marker == "mco" & !is.na(HABITAT)) %>%
+  group_by(year, HABITAT, status) %>%
+  summarise(fam = n_distinct(family),
+            gen = n_distinct(genus),
+            order = n_distinct(order)) %>%
+  ggplot(aes(HABITAT, fam)) +
+  geom_bar(aes(fill = status), stat = "identity", position = "dodge") +
+  theme_minimal() +
+  labs(title = "Family")
+
+df_final %>%
+  filter(marker == "mco" & !is.na(HABITAT)) %>%
+  group_by(year, HABITAT, status) %>%
+  summarise(fam = n_distinct(family),
+            gen = n_distinct(genus),
+            order = n_distinct(order)) %>%
+  ggplot(aes(HABITAT, gen)) +
+  geom_bar(aes(fill = status), stat = "identity", position = "dodge") +
+  theme_minimal() +
+  labs(title = "Genus")
+  
+```
+
+```{r taxonomy by marker - venn}
+
+library(VennDiagram)
+
+# Venn diagrams by order
+mco_order <- unique(df_final$order[df_final$marker == "mco" & !is.na(df_final$order)])
+bf3_order <- unique(df_final$order[df_final$marker == "bf3" & !is.na(df_final$order)])
+venn.diagram(x = list(MCO = mco_order, BF3 = bf3_order), 
+             filename = "order_venn.png", main = "Shared orders")
+
+# Venn diagrams by family
+mco_family <- unique(df_final$family[df_final$marker == "mco" & !is.na(df_final$family)])
+bf3_family <- unique(df_final$family[df_final$marker == "bf3" & !is.na(df_final$family)])
+
+venn.diagram(x = list(MCO = mco_family, BF3 = bf3_family), 
+             filename = "family_venn.png", main = "Shared families",
+             output = TRUE)
+
+# Venn diagrams by genus
+mco_genus <- unique(df_final$genus[df_final$marker == "mco" & !is.na(df_final$genus)])
+bf3_genus <- unique(df_final$genus[df_final$marker == "bf3" & !is.na(df_final$genus)])
+
+venn.diagram(x = list(MCO = mco_genus, BF3 = bf3_genus), 
+             filename = "genus_venn.png", main = "Shared genera",
+             output = TRUE)
+
+```
+
+```{r order by marker - barplots}
+
+# Barplot of number of OTUs in each order, split by marker 
+df_final %>%
+  filter(!is.na(order)) %>%
+  group_by(marker, order) %>%
+  summarise(otu = n_distinct(otu)) %>%
+  ggplot() +
+  geom_bar(aes(order, otu, fill = marker), 
+           stat = "identity", position = "dodge") +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 90)) 
+
+```
+
+```{r richness}
+
+# Create dataframe with reads by OTU at each site and year
+otu_counts <- 
+  df_final %>%
+  # Retaining only OTUs produced by MCO primer set
+  filter(marker == "mco" & plot != "HTUNBURNO03") %>%
+  group_by(id, otu) %>%
+  # Add all reads across ASVs for each OTU at each site per year
+  summarise(otu_count = sum(count)) %>%
+  ungroup()
+
+# Create incidence matrix
+
+otu_mat <-
+  otu_counts %>%
+  select(id, otu, otu_count) %>%
+  acast(id ~ otu, fill = 0)
+
+otu_mat[otu_mat > 0] <- 1
+
+# Calculate alpha diversity
+diversity_shannon <- as.data.frame(vegan::diversity(otu_mat, index = "shannon")) %>%
+    rownames_to_column(var = "id")
+colnames(diversity_shannon) <- c("id", "div")
+
+diversity_simpson <- as.data.frame(vegan::diversity(otu_mat, index = "simpson")) %>%
+    rownames_to_column(var = "id")
+colnames(diversity_simpson) <- c("id", "div")
+
+diversity_rich <- as.data.frame(BAT::alpha(otu_mat)) %>%
+  rownames_to_column(var = "id")
+
+# Create site dataframe
+site <- 
+  df_final %>%
+  select(id, plot, year:HABITAT, -rep) %>%
+  group_by(id) %>%
+  filter(row_number() == 1) %>%
+  ungroup()
+
+# Join diversity with site data
+diversity_rich <- 
+  diversity_rich %>%
+  left_join(site, by = "id")
+
+diversity_shannon <- 
+  diversity_shannon %>%
+  left_join(site, by = "id")
+
+diversity_simpson <- 
+  diversity_simpson %>%
+  left_join(site, by = "id")
+
+# Test variance
+var.test(diversity_rich$Richness[diversity_rich$status == "Burn"], 
+         diversity_rich$Richness[diversity_rich$status == "Unburn"])
+
+var.test(diversity_shannon$div[diversity_shannon$status == "Burn"], 
+         diversity_shannon$div[diversity_shannon$status == "Unburn"])
+
+var.test(diversity_simpson$div[diversity_simpson$status == "Burn"], 
+         diversity_simpson$div[diversity_simpson$status == "Unburn"])
+
+# T-test
+t_status1 <- 
+  t.test(diversity_rich$Richness[diversity_rich$status == "Burn"], 
+         diversity_rich$Richness[diversity_rich$status == "Unburn"],
+       var.equal = TRUE)
+rich_p <- 
+
+t_status2 <- 
+  t.test(diversity_shannon$div[diversity_shannon$status == "Burn"], 
+         diversity_shannon$div[diversity_shannon$status == "Unburn"],
+       var.equal = TRUE)
+shan_p <- t_status2$p.value
+
+t_status3 <- 
+  t.test(diversity_simpson$div[diversity_simpson$status == "Burn"], 
+         diversity_simpson$div[diversity_simpson$status == "Unburn"],
+       var.equal = TRUE)
+
+simp_p <- t_status3$p.value
+
+# Visual - boxplot
+p1 <- ggpubr::ggboxplot(diversity_rich,
+                       x = "status", y = "Richness",
+                       fill = "status",
+                       add = "jitter") + 
+  ggpubr::stat_compare_means(method = "t.test")
+
+p2 <- ggpubr::ggboxplot(diversity_shannon,
+                       x = "status", y = "div",
+                       fill = "status",
+                       add = "jitter") + 
+  ggpubr::stat_compare_means(method = "t.test")
+
+#  Add p-value
+
+# Change method
+p + stat_compare_means(method = "t.test")
+
+
+p1 <- ggplot(diversity_rich, aes(status, Richness)) +
+  geom_boxplot(aes(fill = status)) +
+  geom_jitter(alpha = 0.3) +
+  stat_summary(fun = mean, geom = "point", shape = 24, size = 4, 
+               color = "black", fill = "white" ) +
+  annotate(geom="text", 
+           label = paste0("p-value: ", round(t_status1$p.value, digits = 3)), 
+           x = 2, y = 22) +
+  theme_minimal()
+
+p2 <- ggplot(diversity_shannon, aes(status, div)) +
+  geom_boxplot(aes(fill = status)) +
+  geom_jitter(alpha = 0.3) +
+  stat_summary(fun = mean, geom = "point", shape = 24, size = 4, 
+               color = "black", fill = "white" ) +
+  annotate(geom="text", 
+           label = paste0("p-value: ", round(t_status2$p.value, digits = 3)), 
+           x = 2, y = 3.5) +
+  theme_minimal()
+
+p2 + ggpubr::compare_means(method = "t.test")
+
+p3 <- ggplot(diversity_simpson, aes(status, div)) +
+  geom_boxplot(aes(fill = status)) +
+  geom_jitter(alpha = 0.3) +
+  stat_summary(fun = mean, geom = "point", shape = 24, size = 4, 
+               color = "black", fill = "white" ) +
+  annotate(geom="text", 
+           label = paste0("p-value: ", round(t_status3$p.value, digits = 3)), 
+           x = 2, y = 1) +
+  theme_minimal()
+
+x <- ggpubr::ggarrange(p1, p2, p3,
+                       ncol = 3,
+                       labels = c("Richness",
+                                  "Shannon",
+                                  "Simpson"))
+
+
+# T-test by year
+t_status1 <- 
+  t.test(diversity_rich$Richness[diversity_rich$year == "2020"], 
+         diversity_rich$Richness[diversity_rich$year == "2021"],
+       var.equal = TRUE)
+rich_p <- 
+
+t_status2 <- 
+  t.test(diversity_shannon$div[diversity_rich$year == "2020"], 
+         diversity_shannon$div[diversity_rich$year == "2021"],
+       var.equal = TRUE)
+shan_p <- t_status2$p.value
+
+t_status3 <- 
+  t.test(diversity_simpson$div[diversity_rich$year == "2020"], 
+         diversity_simpson$div[diversity_rich$year == "2021"],
+       var.equal = TRUE)
+
+simp_p <- t_status3$p.value
+
+# Figure
+# Facet by year, fill by status 
+alpha_bar1 <- 
+  diversity_rich %>%
+  ggplot(aes(status, Richness)) + 
+  geom_boxplot(aes(fill = status), alpha = 0.7) +
+  geom_jitter(aes(color = status), alpha = 0.5) +
+  facet_wrap(~year) +
+  stat_summary(fun = mean, geom = "point", shape = 24, size= 4, 
+               color ="black", fill="white") +
+  theme_minimal()
+
+alpha_bar2 <- 
+  diversity_shannon %>%
+  ggplot(aes(status, div)) + 
+  geom_boxplot(aes(fill = status), alpha = 0.7) +
+  geom_jitter(aes(color = status), alpha = 0.5) +
+  facet_wrap(~year) +
+  stat_summary(fun = mean, geom = "point", shape = 24, size= 4, 
+               color ="black", fill="white") +
+  theme_minimal()
+
+alpha_bar3 <- 
+  diversity_simpson %>%
+  ggplot(aes(status, div)) + 
+  geom_boxplot(aes(fill = status), alpha = 0.7) +
+  geom_jitter(aes(color = status), alpha = 0.5) +
+  facet_wrap(~year) +
+  stat_summary(fun = mean, geom = "point", shape = 24, size= 4, 
+               color ="black", fill="white") +
+  theme_minimal()
+
+x2 <- ggpubr::ggarrange(alpha_bar1, alpha_bar2, alpha_bar3,
+                       ncol = 3,
+                       labels = c("Richness",
+                                  "Shannon",
+                                  "Simpson"))
+
+# Richness by habitat
+hab_test <- aov(Richness ~ HABITAT, data = alpha)
+res_test <- aov(Richness ~ reserve, data = alpha)
+
+```
+
+```{r community matrix}
+# Look at sequencing data
+rare <- 
+  df_final %>%
+  group_by(id) %>%
+  summarise(reads = sum(count),
+            otu = n_distinct(otu)) %>%
+  ungroup() %>%
+  ggplot(aes(reads, otu)) +
+  geom_point() +
+  geom_smooth(span = 2) +
+  theme_minimal()
+
+# Cutoff
+reads <- 
+  df_final %>%
+  group_by(id) %>%
+  summarise(reads = sum(count),
+            otu = n_distinct(otu)) 
+
+# Create data frame with Hellinger transformed relative read abundances
+mat_hell <- 
+  df_final %>%
+  filter(plot != "HTUNBURNO03") %>%
+  filter(!id %in% c("ANUNBURNF02_2021", "BCUNBURNR01_2021", "BCUNBURNR02_2021")) %>%
+  group_by(id) %>%
+  filter(sum(count) >= 969) %>%
+  ungroup() %>%
+  group_by(id, otu) %>%
+  summarise(otu_count = sum(count)) %>%
+  ungroup() %>%
+  select(id, otu, otu_count) %>%
+  acast(id ~ otu, fill = 0) %>%
+  as.matrix() %>%
+  decostand(method = "hellinger")
+
+# Use the above matrix to create a binary incidence data frame
+mat_incidence <- mat_hell
+mat_incidence[mat_incidence > 0] <- 1
+
+# mat_hell[mat_hell == 0] <- 0.00000001
+```
+
+```{r calculate distances}
+
+# Calculate distances
+set.seed(1)
+bray <- vegdist(mat_incidence, method = "bray")
+
+```
+
+```{r ordination, adonis, betadis}
+# Dataframe for permanova
+permanova_df <-
+  site %>%
+  filter(id %in% rownames(as.matrix(bray)))
+
+
+# Are there significant differences by habitat, reserve, year, etc?
+adonis_status <- adonis2(bray ~ status, 
+                         data = permanova_df, permutations = 1000)
+
+adonis_year <- adonis2(bray ~ year, 
+                         data = permanova_df, permutations = 1000)
+
+adonis_res <- adonis2(bray ~ reserve, 
+                         data = permanova_df, permutations = 1000)
+
+adonis_hab <- adonis2(bray ~ HABITAT, 
+                         data = permanova_df, permutations = 1000)
+
+adonis_int <- adonis2(bray ~ status*year*HABITAT*reserve, 
+                         data = permanova_df, permutations = 1000)
+
+adonis_total <- adonis2(bray ~ status*year + reserve, 
+                         data = permanova_df, permutations = 1000)
+
+# NMDS exploration
+set.seed(1)
+nmds <- metaMDS(bray, trymax = 1000, k = 2)
+nmds_df <- 
+  as_tibble(nmds$points, rownames = "id") %>%
+  left_join(site, by = "id")
+
+centroid <- 
+  nmds_df %>%
+  group_by(status) %>%
+  summarise(MDS1 = mean(MDS1), MDS2 = mean(MDS2))
+
+nmds_status <- 
+  nmds_df %>%
+  ggplot(aes(x = MDS1, y = MDS2, color = status)) + 
+  geom_point() +
+  #geom_text(aes(label = id), size = 1, color = "black") +
+  stat_ellipse() +
+  geom_point(data = centroid, size = 5) +
+  theme_minimal()
+
+centroid <- 
+  nmds_df %>%
+  group_by(reserve) %>%
+  summarise(MDS1 = mean(MDS1), MDS2 = mean(MDS2))
+
+nmds_reserve <- 
+  nmds_df %>%
+  ggplot(aes(x = MDS1, y = MDS2, color = reserve)) + 
+  geom_point() +
+  #geom_text(aes(label = id), size = 1, color = "black") +
+  stat_ellipse() +
+  geom_point(data = centroid, size = 5) +
+  theme_minimal()
+
+centroid <- 
+  nmds_df %>%
+  group_by(year, status) %>%
+  summarise(MDS1 = mean(MDS1), MDS2 = mean(MDS2))
+
+nmds_int <- 
+  nmds_df %>%
+  ggplot(aes(x = MDS1, y = MDS2, color = status)) + 
+  geom_point() +
+  #geom_text(aes(label = id), size = 1, color = "black") +
+  stat_ellipse() +
+  geom_point(data = centroid, size = 5) +
+  theme_minimal() +
+  facet_wrap(~year)
+
+# By year
+bray_mat <- as.matrix(bray)
+mat_2020 <- bray_mat[grepl("2020", rownames(bray_mat)), 
+                     grepl("2020", colnames(bray_mat))]
+mat_2021 <- bray_mat[grepl("2021", rownames(bray_mat)), 
+                     grepl("2021", colnames(bray_mat))]
+
+df1 <- 
+  site %>%
+  filter(id %in% rownames(mat_2020))
+
+df2 <- 
+  site %>%
+  filter(id %in% rownames(mat_2021))
+
+adonis_2020 <- adonis2(as.matrix(mat_2020) ~ status, 
+                         data = df1, permutations = 1000)
+adonis_2021 <- adonis2(as.matrix(mat_2021) ~ status, 
+                         data = df2, permutations = 1000)
+
+x <- anova(betadisper(as.dist(mat_2020), df1$status))
+y <- anova(betadisper(as.dist(mat_2021), df2$status))
+
+# By reserve
+
+# AN
+mat_AN <- bray_mat[grepl("AN", rownames(bray_mat)), 
+                     grepl("AN", colnames(bray_mat))]
+df_AN <- 
+  site %>%
+  filter(id %in% rownames(mat_AN))
+
+adonis_AN <- adonis2(as.matrix(mat_AN) ~ status, 
+                         data = df_AN, permutations = 1000)
+
+# BC
+mat_BC <- bray_mat[grepl("BC", rownames(bray_mat)), 
+                     grepl("BC", colnames(bray_mat))]
+df_BC <- 
+  site %>%
+  filter(id %in% rownames(mat_BC))
+
+adonis_BC <- adonis2(as.matrix(mat_BC) ~ status, 
+                         data = df_BC, permutations = 1000)
+
+# BO
+mat_BO <- bray_mat[grepl("BO", rownames(bray_mat)), 
+                     grepl("BO", colnames(bray_mat))]
+df_BO <- 
+  site %>%
+  filter(id %in% rownames(mat_BO))
+
+adonis_BO <- adonis2(as.matrix(mat_BO) ~ status, 
+                         data = df_BO, permutations = 1000)
+
+# HT
+mat_HT <- bray_mat[grepl("HT", rownames(bray_mat)), 
+                     grepl("HT", colnames(bray_mat))]
+df_HT <- 
+  site %>%
+  filter(id %in% rownames(mat_HT))
+
+adonis_HT <- adonis2(as.matrix(mat_HT) ~ status, 
+                         data = df_HT, permutations = 1000)
+
+nmds <- metaMDS(as.dist(mat_HT), trymax = 1000, k = 2)
+
+nmds_df <- 
+  as_tibble(nmds$points, rownames = "id") %>%
+  left_join(site, by = "id")
+
+centroid <- 
+  nmds_df %>%
+  group_by(status) %>%
+  summarise(MDS1 = mean(MDS1), MDS2 = mean(MDS2))
+
+nmds_HT <- 
+  nmds_df %>%
+  ggplot(aes(x = MDS1, y = MDS2, color = status)) + 
+  geom_point() +
+  #geom_text(aes(label = id), size = 1, color = "black") +
+  stat_ellipse() +
+  geom_point(data = centroid, size = 5) +
+  theme_minimal() 
+
+# ML
+mat_ML <- bray_mat[grepl("ML", rownames(bray_mat)), 
+                     grepl("ML", colnames(bray_mat))]
+df_ML <- 
+  site %>%
+  filter(id %in% rownames(mat_ML))
+
+adonis_ML <- adonis2(as.matrix(mat_ML) ~ status, 
+                         data = df_ML, permutations = 1000)
+```
+
+```{r habitat summary}
+#hab_sum <- 
+  df_final %>%
+  filter(!is.na(HABITAT)) %>%
+  group_by(year, HABITAT, status) %>%
+  summarise(n = n_distinct(plot)) 
+  ggplot() + 
+  geom_bar(aes(HABITAT, n, fill = status), stat = "identity",
+           alpha = 0.7, position = "dodge")  +
+  facet_wrap(~year) +
+  theme_minimal()
+```
+
+```{r calculate beta diversity}
+
+beta <- beta(mat_incidence, abund = FALSE)
+beta <- as.matrix(beta$Btotal)
+
+# Compare against distances
+dist <- as.matrix(read.csv("site_distances.csv"))
+rownames(dist) <- dist[,1]
+dist <- dist[,-1]
+dist <- 
+  melt(dist) %>% 
+  filter(value != 0.0000) %>%
+  mutate(Var1 = gsub(" ", "", Var1),
+         Var2 = gsub("\\.", "", Var2)) %>%
+  rename(distance = value)
+
+beta_distance <- 
+beta_df %>%
+  filter(year.x == year.y,
+         HABITAT.x == HABITAT.y,
+         reserve.x == reserve.y) %>%
+  left_join(dist, by = c("plot.x" = "Var1", "plot.y" = "Var2"))
+
+p <- 
+  beta_distance %>%
+  filter(reserve.x == reserve.y) %>%
+  ggplot(aes(as.numeric(distance), value)) +
+  geom_point() +
+  geom_smooth(method = "lm") 
+
+  filter(year.x == year.y,
+         reserve.x == reserve.y, 
+         HABITAT.x == HABITAT.y) %>%
+  rename(beta = value) %>%
+  mutate(comparison = case_when(
+    status.x == "Burn" & status.y == "Burn" ~ "Burn", 
+    status.x == "Unburn" & status.y == "Unburn" ~ "Unburn",
+    TRUE ~ "Between"
+  ))
+
+# Eliminate double comparisons by making upper tri 0
+beta[upper.tri(beta)] <- 0
+beta <- 
+  # Melt into DF
+  melt(beta) %>%
+  # Remove 0 values - self comparisons, or reverse comparisons
+  filter(value != 0) %>%
+  left_join(site, by = c("Var1" = "id")) %>%
+  left_join(site, by = c("Var2" = "id")) %>%
+  filter(year.x == year.y,
+         reserve.x == reserve.y, 
+         HABITAT.x == HABITAT.y) %>%
+  rename(beta = value) %>%
+  mutate(comparison = case_when(
+    status.x == "Burn" & status.y == "Burn" ~ "Burn", 
+    status.x == "Unburn" & status.y == "Unburn" ~ "Unburn",
+    TRUE ~ "Between"
+  ))
+
+give.n <- function(x){
+  return(c(y = median(x)*0.5, label = length(x))) 
+  # experiment with the multiplier to find the perfect position
+}
+
+beta_box1 <-
+  beta %>%
+  ggplot(aes(comparison, beta)) +
+  geom_boxplot(aes(fill = comparison), 
+               alpha = 0.8) +
+  geom_jitter(aes(fill = comparison), alpha = 0.3) +
+  facet_grid(~year.x)
+  stat_summary(fun.data = give.n, geom = "text", fun = median,
+                  position = position_dodge(width = 0.95)) +
+ +
+  theme_minimal()
+
+btwn <- beta %>%
+  filter(comparison == "Between")
+
+anova <- aov(beta ~ comparison, beta)
+TukeyHSD(anova)
+
+anova2 <- aov(beta ~ HABITAT.x, beta)
+
+beta_box2 <-
+  beta_total %>%
+  ggplot(aes(comparison, beta)) +
+  geom_boxplot(aes(fill = comparison), 
+               alpha = 0.8) +
+  geom_jitter(aes(fill = comparison), alpha = 0.3) +
+  stat_summary(fun.data = give.n, geom = "text", fun = median,
+                  position = position_dodge(width = 0.95)) +
+  facet_grid(~HABITAT.x) +
+  theme_minimal()
+
+```
+
+```{r sites by habitat}
+
+scrub_sites  <- 
+  df_final %>%
+  filter(HABITAT =="Scrub") %>%
+  distinct(id) %>% 
+  pull()
+
+grass_sites  <- 
+  df_final %>%
+  filter(HABITAT == "Grassland") %>%
+  distinct(id) %>% 
+  pull()
+
+oak_sites  <- 
+  df_final %>%
+  filter(HABITAT == "Oak Woodland") %>%
+  distinct(id) %>% 
+  pull()
+
+habitats <- list(oak_sites, scrub_sites, grass_sites)
+
+```
+
+```{r create matrices by habitat}
+scrub_mat <- 
+  df_final %>%
+  filter(marker == "mco" 
+         & plot != "HTUNBURNO03" 
+         & HABITAT == "Scrub") %>%
+  group_by(id) %>%
+  mutate(total = sum(count)) %>%
+  ungroup() %>%
+  filter(total >= 1000) %>%
+  group_by(id, otu) %>%
+  summarise(otu_count = sum(count)) %>%
+  ungroup() %>%
+  select(id, otu, otu_count) %>%
+  acast(id ~ otu, fill = 0) %>%
+  as.matrix() %>%
+  decostand(method = "hellinger")
+  
+scrub_mat[scrub_mat == 0] <- 0.00000001
+
+grass_mat <- 
+  df_final %>%
+  filter(marker == "mco" 
+         & plot != "HTUNBURNO03" 
+         & HABITAT == "Grassland") %>%
+  group_by(id) %>%
+  mutate(total = sum(count)) %>%
+  ungroup() %>%
+  filter(total >= 1000) %>%
+  group_by(id, otu) %>%
+  summarise(otu_count = sum(count)) %>%
+  ungroup() %>%
+  select(id, otu, otu_count) %>%
+  acast(id ~ otu, fill = 0) %>%
+  as.matrix() %>%
+  decostand(method = "hellinger")
+  
+grass_mat[grass_mat == 0] <- 0.00000001
+
+oak_mat <- 
+  df_final %>%
+  filter(marker == "mco" 
+         & plot != "HTUNBURNO03" 
+         & HABITAT == "Oak Woodland") %>%
+  group_by(id) %>%
+  mutate(total = sum(count)) %>%
+  ungroup() %>%
+  filter(total >= 1000) %>%
+  group_by(id, otu) %>%
+  summarise(otu_count = sum(count)) %>%
+  ungroup() %>%
+  select(id, otu, otu_count) %>%
+  acast(id ~ otu, fill = 0) %>%
+  as.matrix() %>%
+  decostand(method = "hellinger")
+  
+oak_mat[oak_mat == 0] <- 0.00000001
+
+```
+
+```{r grassland}
+set.seed(1)
+
+# Ordination
+grass_mds <- metaMDS(grass_mat, trymax = 1000)
+
+# Plot
+grass_df <- 
+  as_tibble(grass_mds$points, rownames = "id") %>%
+  left_join(site, by = "id") 
+
+grass_df %>%
+  ggplot(aes(x = MDS1, y = MDS2, color = status)) + 
+  geom_point() +
+  stat_ellipse() +
+  facet_wrap(~year) +
+  theme_minimal()
+
+grass_df %>%
+  ggplot(aes(x = MDS1, y = MDS2, color = reserve)) + 
+  geom_point() +
+  theme_minimal()
+
+# Distance matrix
+grass_dist1 <- vegdist(grass_mat[grepl("2020", rownames(grass_mat)),])
+grass_dist2 <- vegdist(grass_mat[grepl("2021", rownames(grass_mat)),])
+
+# PERMANOVA
+adonis2(grass_dist1~status*reserve, 
+        grass_df[grass_df$id %in% rownames(grass_mat[grepl("2020", rownames(grass_mat)), ]),], 
+        permutations = 1000)
+
+adonis2(grass_dist2~status*reserve, 
+        grass_df[grass_df$id %in% rownames(grass_mat[grepl("2021", rownames(grass_mat)), ]),], 
+        permutations = 1000)
+
+# Dispersion
+anova(betadisper(grass_dist1, 
+                 grass_df$status[grass_df$id %in% rownames(grass_mat[grepl("2020", rownames(grass_mat)),])]))
+
+anova(betadisper(grass_dist2, 
+                 grass_df$status[grass_df$id %in% rownames(grass_mat[grepl("2021", rownames(grass_mat)),])]))
+```
+
+```{r scrub}
+set.seed(1)
+
+# Ordination
+scrub_mds <- metaMDS(scrub_mat, trymax = 1000)
+
+# Plot
+scrub_df <- 
+  as_tibble(scrub_mds$points, rownames = "id") %>%
+  left_join(site, by = "id") 
+
+scrub_df %>%
+  ggplot(aes(x = MDS1, y = MDS2, color = status)) + 
+  geom_point() +
+  stat_ellipse() +
+  facet_wrap(~year) +
+  theme_minimal()
+
+scrub_df %>%
+  ggplot(aes(x = MDS1, y = MDS2, color = reserve)) + 
+  geom_point() +
+  stat_ellipse() +
+  theme_minimal()
+
+
+# Distance matrix
+scrub_dist1 <- vegdist(scrub_mat[grepl("2020", rownames(scrub_mat)),])
+scrub_dist2 <- vegdist(scrub_mat[grepl("2021", rownames(scrub_mat)),])
+
+# PERMANOVA
+adonis2(scrub_dist1~status*reserve, 
+        scrub_df[scrub_df$id %in% rownames(scrub_mat[grepl("2020", rownames(scrub_mat)), ]),], 
+        permutations = 1000)
+
+adonis2(scrub_dist2~status*reserve, 
+        scrub_df[scrub_df$id %in% rownames(scrub_mat[grepl("2021", rownames(scrub_mat)), ]),], 
+        permutations = 10000)
+
+# Dispersion
+anova(betadisper(scrub_dist1, 
+                 scrub_df$status[scrub_df$id %in% rownames(scrub_mat[grepl("2020", rownames(scrub_mat)),])]))
+
+anova(betadisper(scrub_dist2, 
+                 scrub_df$status[scrub_df$id %in% rownames(scrub_mat[grepl("2021", rownames(scrub_mat)),])]))
+
+```
+
+```{r oak}
+as.matrix(scrub_dist1)
+
+set.seed(1)
+
+# Ordination
+oak_mds <- metaMDS(oak_mat, trymax = 1000)
+
+# Plot
+oak_df <- 
+  as_tibble(oak_mds$points, rownames = "id") %>%
+  left_join(site, by = "id") 
+
+oak_df %>%
+  ggplot(aes(x = MDS1, y = MDS2, color = status)) + 
+  geom_point() +
+  stat_ellipse() +
+  facet_wrap(~year) +
+  theme_minimal()
+
+# Distance matrix
+oak_dist1 <- vegdist(oak_mat[grepl("2020", rownames(oak_mat)),])
+oak_dist2 <- vegdist(oak_mat[grepl("2021", rownames(oak_mat)),])
+
+# PERMANOVA
+adonis2(oak_dist1~status*reserve, 
+        oak_df[oak_df$id %in% rownames(oak_mat[grepl("2020", rownames(oak_mat)), ]),], 
+        permutations = 1000)
+
+adonis2(oak_dist2~status*reserve, 
+        oak_df[oak_df$id %in% rownames(oak_mat[grepl("2021", rownames(oak_mat)), ]),], 
+        permutations = 10000)
+
+# Dispersion
+anova(betadisper(oak_dist1, 
+                 oak_df$status[oak_df$id %in% rownames(oak_mat[grepl("2020", rownames(oak_mat)),])])*
+        )
+
+anova(betadisper(oak_dist2, 
+                 oak_df$status[oak_df$id %in% rownames(oak_mat[grepl("2021", rownames(oak_mat)),])]))
+
+```
+
+
