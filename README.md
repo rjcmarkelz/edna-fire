@@ -217,3 +217,10 @@ docker images
 # REPOSITORY                                       TAG                     IMAGE ID       CREATED          SIZE
 # rocker_geospatial_tidyverse_ape_vegan_bat_lulu   latest                  c51e0fa4391c   29 seconds ago   5.15GB
 ```
+
+Download base container.
+```bash
+docker pull ncbi/blast
+
+docker run -it -v /Users/rjcmarkelz/Documents/Projects/THINK/git.repos/BIDS/DATA/Fire_Raw:/DATA/ ncbi/blast /bin/bash
+```
