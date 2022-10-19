@@ -206,6 +206,13 @@ sessionInfo(package = NULL)
 # [121] timeDate_4021.104    class_7.3-19         nls2_0.3-3
 # [124] hypervolume_3.0.4    pROC_1.18.0          shiny_1.6.0
 # [127] lubridate_1.8.0
+
+citation("BAT")
+citation("lulu")
+citation("ape")
+citation("vegan")
+citation("tidyverse")
+
 ```
 
 Outside of container.
