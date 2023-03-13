@@ -1,5 +1,5 @@
 ---
-title: "Fire Project Analysis"
+title: "Sequence Run #3 MCO cleanup"
 author: "Anna Holmquist"
 date: "12/9/2021"
 output: html_document
@@ -7,6 +7,7 @@ output: html_document
 
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
+knitr::opts_knit$set(root.dir = 'F:/Research/rprojects/fire_project/') 
 ```
 
 ```{r libraries}
@@ -25,7 +26,7 @@ BiocManager::install(version = "3.14")
 if (!require("lulu", quietly = TRUE)){
   if (!require("devtools", quietly = TRUE)){
     install.packages("devtools")}
-  devtools::install_github("tobiasgf/lulu")  
+  devtools::install_github("tobiasgf/lulu")                                 
 }
 library(lulu)
 library(ape)
@@ -34,358 +35,355 @@ library(BAT)
 ```
 
 ```{r data, include=FALSE, echo=FALSE}
+getwd()
 # Dataframes produced in DADA2 script
-df_bf3 <- read.csv("dada2_products/df_bf3.csv", row.names = 1) 
-df_mco <- read.csv("dada2_products/df_mco.csv", row.names = 1) 
+df_mco <- read.csv("mco_fire_all.csv") 
+
+df_mco <- df_mco %>%
+  mutate(sample = case_when(
+    grepl("GTAGAGTA\\+AAGGAGTA", sample) ~ "fire_control_1",
+    grepl("GTAGAGTA\\+CTAAGCCT", sample) ~ "fire_control_2",
+    grepl("ACTGATTA\\+AAGGAGTA", sample) ~ "fire_control_1",
+    grepl("ACTGATTA\\+CTAAGCCT", sample) ~ "fire_control_2",
+    TRUE ~ sample
+    ))
+
+fire_df_arthropod <- read.csv("mco_fire_taxonomy_arthropoda.csv")
 ```
 
-```{r master dataframe}
-# Combine raw data frames produced by dada2
-df <- rbind(df_bf3, df_mco)
-```
+```{r decontam}
+seq_controls<- df_mco %>%
+  mutate(control = ifelse(grepl("control", sample) | grepl("blank", sample), 
+                          "control", "true"))
 
-```{r multiplex name fix}
-# Read in CSV where labels were assessed against indexing
-# template and corrected as needed
-sample_fix <- read.csv("fire_labels.csv") 
+decontam <- DecontamASVsv2(seq_controls) 
 
-# Join by original sample name, which will bind the "true" sample name
-samples_corrected <-
-  df %>%
-  mutate(sample = gsub("-", ".", sample)) %>%
-  left_join(sample_fix, by = c("sample" = "sample_seq")) %>%
-  # If sample name is just the pan label, this is the correct ID
-   mutate(sample_correct = ifelse(grepl("^pan202", sample), 
-                                  sample, sample_correct)) %>%
-  # Unknown primer pair, not used, appeared in sequences. Cannot confidently
-  # determine what sample this should be assigned to. Remove. 
-  filter(sample != "GTTTCGTA.AGGCGAAG")
-
-# Check for any remaining errors
-any(is.na(samples_corrected$sample_correct))
-
+seq_decontaom <- df_mco %>%
+  filter(!asv %in% rownames(decontam))
 ```
 
 ```{r run lulu}
-FastaByASVAmplicon(samples_corrected, "bf3")
-FastaByASVAmplicon(samples_corrected, "mco")
+FastaByASV(seq_decontaom, "mco")
 
 # In Linux:
 # ls *.fasta | sed 's/.fasta//' | awk '{print "makeblastdb -in "$0".fasta -parse_seqids -dbtype nucl \nblastn -db "$0".fasta -outfmt \x27 6 qseqid sseqid pident \x27 -out "$0"_match_list.txt -qcov_hsp_perc 80 -perc_identity 84 -query "$0".fasta \n"}' >> batch_lulu.sh
 
-bf3_lulu <- LULUFunction("bf3", samples_corrected)
-mco_lulu <- LULUFunction("mco", samples_corrected)
+mco_lulu <- LULUFunction("mco", seq_decontaom)
 
 df_lulu <- 
-  samples_corrected %>%
-  filter(asv %in% bf3_lulu$curated_otus |
-           asv %in% mco_lulu$curated_otus)
+  seq_decontaom %>%
+  filter(asv %in% mco_lulu$curated_otus) %>%
+  filter(!asv %in% rownames(decontam))
 
-write.csv(df_lulu, "df_lulu.csv", row.names = F)
+df_lulu %>%
+  group_by(asv) %>%
+  filter(row_number() == 1) %>%
+  ungroup() %>%
+  summarise(sum(asv_size))
+
+write.csv(df_lulu, "mco_lulu.csv", row.names = F)
 ```
 
-```{r final df}
-# Fix naming  
-df_name <- 
-  df_lulu %>%
-  # Filter for ASVs with more than 10 reads, and for ASVs detected in samples
-  # with more than one read
-  filter(asv_size > 10 &
-           count > 1) %>%
-  separate(sample_correct, sep = "\\.", into = c("samp1", "samp2")) %>%
-  mutate(samp2 = ifelse(grepl("^pan", samp1), samp1, samp2)) %>%
-  # Break sample name into site information
-  separate(samp2, sep = "\\_", 
-           into = c("year", "rep", "reserve", 
-                    "status", "site1", "site2")) %>%
-  mutate(site1 = ifelse(!is.na(site2), paste0(site1, site2), site1)) %>%
-  select(-c(samp1, site2, pool, `F`:indexes)) %>%
-  rename(site = site1) %>%
-  mutate(year = sub("pan", "", year),
-         id = paste0(reserve, site, year, "_", status))
+```{r final df - correcting error names}
+# Separate 
+fire <- df_lulu %>%
+  filter(!grepl("LL", sample))
 
-# Rarefaction
-df_name %>%
-  filter(marker == "mco") %>%
-  group_by(id) %>%
-  summarise(reads = sum(count),
-             asv = n_distinct(asv)) %>%
-  ggplot(aes(reads, asv)) +
-  geom_point() +
-  geom_smooth(span = 1)
+fire_fix <- 
+  fire %>%
+  mutate(sample2 = gsub("_S[0-9]*_F_filt.*", "", sample)) %>%
+  mutate(sample2 = gsub("_R1_mco.fastq.*", "", sample2)) %>%
+  left_join(corr_names, by = c("sample2" = "Incorrect.sample")) %>%
+  filter(is.na(Correct.sample) | Correct.sample != "x") %>%
+  mutate(sample3 = ifelse(is.na(Correct.sample), sample2, Correct.sample)) %>%
+  filter(!grepl("\\+", sample3)) %>%
+  rename(sample_corr = sample3) %>%
+  select(-sample2, -Correct.sample) %>%
+  separate(sample_corr,
+                  sep = "_",
+                  into = c("year", "rep", "reserve", "status", 
+                           "site", "numbers"), remove = F) %>%
+  mutate(site = ifelse(!is.na(numbers), paste0(site, numbers), site)) %>%
+  select(-numbers)
 
-df_name %>%
-  filter(marker == "mco") %>%
-  group_by(id) %>%
-  summarise(reads = sum(count),
-             asv = n_distinct(asv)) %>%
-  summary()
-  
-  
-# Join with site data
-site_data <- 
-  read.csv("combined_fire_monitoring_data.csv") %>%
-  rename(year = Year,
-         plot = PLOT.NAME) %>%
-  mutate(year = as.character(year),
-         plot = gsub(" ", "", plot))
+fire_numt <- read.csv("mco_fire_noNuMt.csv")
 
-df_final <- 
-  df_filter %>%
-  mutate(plot = toupper(paste0(reserve, status, site))) %>%
-  left_join(site_data, by = c("plot", "year")) %>%
-  filter(!is.na("RESERVE"))
+fire_fix_filt <- fire_fix %>%
+  filter(asv %in% fire_numt$Name) %>%
+  group_by(sample_corr) %>%
+  filter(count / sum(count) >= 0.001)
+# https://www.nature.com/articles/nmeth.2276
+# OTUs and ASVs Produce Comparable Taxonomic and Diversity using tailored abundance filters
 
-# Write fasta
-FastaByASVAmplicon(df_filter, "bf3")
-FastaByASVAmplicon(df_filter, "mco")
+write.csv(fire_fix, "mco_fire.csv", row.names = F)
+write.csv(fire_fix_filt, "mco_fire_filt.csv", row.names = F)
 
-# Write csv
-write.csv(df_final, "df_final.csv", row.names = F)
-
-```
-
-```{r blast}
-# Used Geneious to get blast matches and exported to CSV
-mco_blast <- 
-  read.csv("dada2_products/blast_mco.csv") %>%
-  separate(Organism,
-           into = c("genus", "species"), 
-           sep = " ")
-
-bf3_blast <- 
-  read.csv("dada2_products/blast_bf3.csv") %>%
-  select(-Sequence, -Type) %>%
-  separate(Organism,
-           into = c("genus", "species"), 
-           sep = " ")
+fire_fix_filt %>%
+  ungroup() %>%
+  summarise(sum(count)) # 3309883
+FastaByASV(fire_fix, "mco")
 ```
 
 ```{r lineage assignment}
-all_blast <- 
-  rbind(mco_blast, bf3_blast) %>%
-  mutate(percent_match = as.numeric(sub("%", "", X..Pairwise.Identity))) %>%
-  select(-X..Pairwise.Identity) 
+getwd()
+# Fire BLAST
+fire_df <- read.csv("mco_fire_filt_numt_removed.csv")
+fire_blast <- read.csv("mco_blast.csv")
 
-# Unique genera from data
-taxa <- unique(all_blast$genus)
-  
-# Function to get full lineage for each genus/taxon
-library(rentrez)
-library(XML)
-  lineage <- list()
-  # Loop through all in list and extract full lineage information
-  for (i in 1:length(taxa)){
-    x <- GetLineage(taxa[i])
-    print(x)
-    lineage <- append(lineage, list(x))
-  }
-  # Create a named list
-  names(lineage) <- taxa
-  
-  # Returns unique items to identify to level, as well as data frame
-  # for when you rejoin with seq data
-  item <- UniqueLevels(lineage)
-  # Break into these two items
-  identify <- item[[1]]
-  lineage_info <- item[[2]]
-  level <- TaxonomicLevel(identify)
-  blast <- as.data.frame(cbind(identify, level))
+unique_taxa <- fire_blast %>%
+  mutate(Organism = gsub(" nr.", "", Organism),
+         Organism = gsub(" sp.", "", Organism)) %>%
+  distinct(Organism) %>%
+  pull(Organism)
 
-  # Bind with lineage information. Remove ambiguous IDs (Error, 
-  # multiple IDs assigned)
-  blast <- blast %>%
-    filter(level != "ERROR") %>%
-    right_join(lineage_info, by = c("identify" = "metazoa")) %>%
-    group_by(blast_id, level) %>%
-    filter(n_distinct(identify) == 1) 
+lineage_list <- list()
 
-  # Bind with lineage information 
-  blast_full_taxonomy <- blast %>%
-    filter(!is.na(level) & level != "") %>%
-    pivot_wider(id_cols = blast_id,
-                names_from = level,
-                values_from = identify) %>%
-    select(c("blast_id", "kingdom", "phylum", "subphylum",
-             "class", "order", "suborder",
-             "superfamily", "family", "subfamily",
-             "tribe", "genus"))
-      
-    # Bind with data
-    final_taxonomy <- right_join(blast_full_taxonomy, all_blast,
-                                 by = c("blast_id" = "genus")) %>%
-      rename(asv = Document.Name,
-             accession = Accession) %>%
-      filter(percent_match > 80) %>%
-      select(asv, blast_id, accession, percent_match, kingdom:species)
-    
-    # Bind with final data frame
-    df_final_taxonomy <- left_join(df_final, final_taxonomy, by = "seq")
-    write.csv(df_final_taxonomy, "df_final_taxonomy.csv", row.names = F)
+for(i in 2521:length(unique_taxa)){
+  print(i)
+  lineage_list <- append(lineage_list, list(GetLineage(unique_taxa[i])))
+}
+names(lineage_list) <- unique_taxa
+
+to_assign <- UniqueLevels(lineage_list)
+blast_match <- to_assign[[2]]
+assign <- to_assign[[1]]
+org <- to_assign[[2]]
+
+level <- vector()
+id <- TaxonomicLevel(assign)
+fire_id <- as.data.frame(cbind(assign, id)) %>%
+  full_join(org, by = c("assign" = "metazoa"))
+
+fire_id <- fire_blast %>%
+  mutate(Organism = gsub(" nr.", "", Organism),
+         Organism = gsub(" sp.", "", Organism),
+         X..Pairwise.Identity = as.numeric(gsub("%","", X..Pairwise.Identity))) %>%
+  rename(percent = X..Pairwise.Identity) %>%
+  group_by(Document.Name) %>%
+  slice(which.max(percent)) %>% 
+  ungroup() %>% 
+  separate(Organism,
+           into = c("genus_blast", "species_blast")) %>%
+  left_join(fire_id, by = c("genus_blast" = "blast_id")) %>%
+  mutate(id = ifelse(id == "", NA, id)) %>%
+  filter(id != "clade") %>%
+  pivot_wider(names_from = id, values_from = assign)
+
+write.csv(fire_id, 
+          "fire_blast_id.csv", 
+          row.names = F)
+
+# Join with MCO data
+fire_id <- read.csv("fire_blast_id.csv") %>%
+  rename("asv" = "Document.Name")
+
+fire_df_taxonomy <- fire_id %>%
+  right_join(fire_df, by = "asv") %>%
+  mutate(sample_name = paste(year, reserve, site, status, sep = "_")) 
+sum(fire_df_taxonomy$count) # 3,309,883
+length(unique(fire_df_taxonomy$asv)) # 1543
+
+write.csv(fire_df_taxonomy, 
+          "mco_fire_taxonomy_all.csv", 
+          row.names = F)
+
+fire_df_arthropod <- fire_df_taxonomy %>%
+  filter(percent >= 80) %>%
+  filter(phylum == "Arthropoda") %>% 
+  mutate(sample_name = paste(year, reserve, site, status, sep = "_")) 
+length(unique(fire_df_arthropod$asv)) # 1030
+
+
+write.csv(fire_df_arthropod, "mco_fire_taxonomy_arthropoda.csv", 
+            row.names = F)
+sum(fire_df_arthropod$count) # 2311643
+
+fire_df_other <- fire_df_taxonomy %>%
+  filter(percent >= 80) %>%
+  filter(phylum != "Arthropoda") 
+sum(fire_df_other$count) # 535
+
+write.csv(fire_df, "mco_fire_taxonomy_othereuk.csv", 
+          row.names = F)
+
 ```
 
-```{r OTU clustering}
-# Remove BLAST hits
-df_rep_filter <-
-  df_final_taxonomy %>%
-  mutate(id = paste0(plot, "_", year)) %>% 
-  group_by(id, seq, rep) %>%
-  slice(which.max(percent_match)) %>%
-  ungroup()
+I don't want clustering changing the # of ASVs. Replicate filtering first.
+```{r replicate filter}
 
-# Create fasta files
-lapply(c("bf3", "mco"), FastaByASVAmplicon, table = df_rep_filter)
+df_filt <- fire_df_arthropod %>%
+  group_by(sample_name) %>%
+  mutate(total_reps = n_distinct(rep)) %>%
+  ungroup() %>%
+  group_by(sample_name, asv) %>%
+  mutate(rep_combined = sum(count),
+         num_reps = n_distinct(rep)) %>%
+  ungroup() %>%
+  filter(num_reps >= 2) %>%
+  group_by(sample_name, asv) %>%
+  # Keep only one ASV per sample, one with highest count
+  # Rep-combined can be used if interested in total reads across
+  # replicates
+  slice(which.max(count)) %>%
+  ungroup() 
 
-# Function to generate OTUs
-OTUKmer <- function(amplicon, df, threshold){
-  
-  kmer_df <- as.data.frame(kmer::otu((read.FASTA(paste0(amplicon, "_final.fasta"))), 
-                                     threshold = threshold),
-                           col.names = "otu") 
-                         
-  colnames(kmer_df) <- "otu"
-    
-  kmer_df <- 
-    kmer_df %>%
-    rownames_to_column(var = "asv") %>%
-    mutate(otu = paste0("OTU_", amplicon, "_", otu)) %>%
+# Overview
+df_filt  %>%
+  summarise(sum(rep_combined)) # 2167382
+length(unique(df_filt$sample_name)) # 123
+length(unique(df_filt$asv)) # 584
+
+```
+
+```{r OTU clustering - swarm}
+FastaForSwarm(df_filt, "mco", 
+              filename = "swarmv2/fire_arthropoda.fasta")
+
+swarmf_output <- OTUDefinition(df_filt, "mco", "swarmv2/fire_swarm.out")
+swarmd3_output <- OTUDefinition(df_filt, "mco", "swarmv2/fire_d3swarm.out")
+
+otu_summary_f <- swarmf_output[[1]]
+otu_summary_d3 <- swarmd3_output[[1]]
+
+otu_df_f <- swarmf_output[[2]]
+otu_df_d3 <- swarmd3_output[[2]]
+
+write.csv(otu_summary_f, 
+          "swarmv2/otu_summary_f.csv",
+          row.names = F)
+write.csv(otu_summary_d3, 
+          "swarmv2/otu_summary_d3.csv",
+          row.names = F)
+
+write.csv(otu_df_f, 
+          "swarmv2/df_f.csv",
+          row.names = F)
+write.csv(otu_df_d3, 
+          "swarmv2/df_d3.csv",
+          row.names = F)
+
+## Error check
+
+t <- otu_df_f %>%
+  group_by(sample_name) %>%
+  summarise(n_distinct(asv)) 
+t2 <- otu_df_d3 %>%
+  group_by(sample_name) %>%
+  summarise(n_distinct(asv)) 
+
+  # One OTU seq per otu
+  otu_summary_f %>%
     group_by(otu) %>%
-    mutate(parent = sub("\\*", "", asv[grepl("\\*", asv)]),
-           asv = sub("\\*", "", asv))  %>%
-    ungroup()
+    filter(n_distinct(otu_seq) > 1)
+
+  otu_summary_d3 %>%
+    group_by(otu) %>%
+    filter(n_distinct(otu_seq) > 1)
   
-  seq <- 
-    df %>%
-    ungroup() %>%
-    filter(marker == amplicon) %>%
-    select(asv, seq) %>%
-    group_by(asv) %>%
-    filter(row_number() == 1) %>% 
-    ungroup()
-
-  kmer_df <- 
-    kmer_df %>%
-    left_join(seq, by = "asv") %>% 
-    rename(asv_seq = seq) %>%
-    left_join(seq, by = c("parent" = "asv")) %>%
-    rename(otu_seq = seq)
+  # One OTU per ASV
+  otu_summary_f %>%
+    group_by(daughters) %>%
+    filter(n_distinct(otu) > 1)
+  otu_summary_d3 %>%
+    group_by(daughters) %>%
+    filter(n_distinct(otu) > 1)
   
-  return(kmer_df)
-  
-}
+  # Check for more OTUs than ASVs per sample
+  otu_df_f %>%
+    group_by(sample_name) %>%
+    filter(n_distinct(otu) > n_distinct(asv))
+  otu_df_d3 %>%
+    group_by(sample_name) %>%
+    filter(n_distinct(otu) > n_distinct(asv))
 
-# Create OTUs
-otus <- bind_rows(lapply(c("bf3", "mco"), 
-                          OTUKmer, df = df_rep_filter, threshold = 0.95))
-
-# Join all data frames together, and join with sample data
-final_otus <- 
-  df_rep_filter %>%
-  filter(marker %in% c("bf3", "mco")) %>%
-  left_join(otus, by = "asv") 
-
-# Write csv
-write.csv(final_otus, "final_otus_95.csv", row.names = F)
+## Summary
+length(unique(otu_df_f$otu)) # 502
+length(unique(otu_df_d3$otu)) # 448
 
 ```
 
-Narrowing based on presence in 2 of 3 samples, if reads were produced for three replicates
-```{r pcr replicates}
+```{r OTU clustering - kmer}
+set.seed(1)
+FastaByASV(df_filt, "mco")
+t <- OTUClusters("mco_cluster.fasta", otu_threshold = 0.97, 
+                 df = df_filt, x = 5)
+length(unique(t$otu)) # 405
 
-rep3 <- 
-  final_otus %>%
-  group_by(id, marker) %>%
-  filter(n_distinct(rep) == 3) %>%
+df_kmr_otu <- df_filt %>%
+  rename(asv_seq = seq) %>%
+  left_join(t, by = c("asv")) %>%
+  rename(otu_seq = seq)
+
+# 97%, kmer = 5
+write.csv(df_kmr_otu, "df_kmer_97.csv", row.names = F)
+```
+
+```{r compare to abundances}
+# format pan2020_AN_F01_Burn
+abund <- read.csv("sample_abundances.csv") %>%
+  group_by(sample_id, year) %>%
+  mutate(total = sum(count)) %>%
+  filter(row_number() == 1) %>%
   ungroup() %>%
-  group_by(id, marker, otu) %>%
-  filter(n_distinct(rep) > 1) %>%
-  ungroup()
+  select(-count) %>%
+  separate(sample_id,
+           into= c("reserve", "status", "letter", "num"),
+           remove = F
+          ) %>%
+  mutate(status = gsub("ed", "", status)) %>%
+  mutate(sample_name = paste0("pan", year, "_", reserve, "_", letter, num, "_", status)) %>%
+  mutate(sample_name = gsub("NA", "", sample_name)) %>%
+  select(sample_name, sample_id, total)
 
-rep_filter <- 
-  final_otus %>%
-  group_by(id, marker) %>%
-  filter(n_distinct(rep) < 3) %>%
-  ungroup() %>%
-  rbind(rep3) 
+filter_comparison <- df_filt %>%
+  group_by(sample_name) %>%
+  summarize(otu = n_distinct(otu),
+         asv = n_distinct(asv)) %>%
+  left_join(abund)
 
-write.csv(rep_filter, "rep_filter.csv", row.names = F)
-```
+unfiltered_comparison <- otu_df %>%
+  group_by(sample_name) %>%
+  summarize(otu = n_distinct(otu),
+         asv = n_distinct(asv)) %>%
+  left_join(abund)
 
-Dataframe with only arthropoda
-```{r arthropods}
-df_final <- 
-  rep_filter %>%
-  filter(phylum == "Arthropoda")
+unfiltered_comparison %>%
+  filter(otu > total) %>%
+  distinct(sample_name) # 48
 
-species <- vector()
-genus <- vector()
-fam <- vector()
-order <- vector()
+filter_comparison %>%
+  filter(otu > total) %>%
+  distinct(sample_name) # 9
 
-for (i in 1:length(df_final$family)){
-  if (df_final$percent_match[i] < 85) {
-    species[i] <- NA
-    genus[i] <- NA
-    fam[i] <- NA
-    order[i] <- NA
-  } else if (df_final$percent_match[i] >= 85 &
-             df_final$percent_match[i] < 92){
-    species[i] <- NA
-    genus[i] <- NA
-    fam[i] <- NA
-    order[i] <- df_final$order[i]
-  } else if (df_final$percent_match[i] >= 92 &
-             df_final$percent_match[i] < 95){
-    species[i] <- NA
-    genus[i] <- NA
-    fam[i] <- df_final$family[i]
-    order[i] <- df_final$order[i]
-  } else if  (df_final$percent_match[i] >= 95 &
-              df_final$percent_match[i] < 99){
-    species[i] <- NA
-    genus[i] <- df_final$genus[i]
-    fam[i] <- df_final$family[i]
-    order[i] <- df_final$order[i]
-  } else{
-    species[i] <- df_final$species[i]
-    genus[i] <- df_final$genus[i]
-    fam[i] <- df_final$family[i]
-    order[i] <- df_final$order[i]
-  }
-}
+filter_comparison %>%
+  filter(otu > total) %>%
+  mutate(diff = otu - total) %>%
+  summarise(mean(diff), 
+            median(diff))
 
-df_final$order <- order
-df_final$family <- fam
-df_final$genus <- genus
-df_final$species <- species
+unfiltered_comparison %>%
+  filter(otu > total) %>%
+  mutate(diff = otu - total) %>%
+  summarise(mean(diff),
+            median(diff))
 
-FastaByOTU(df_final, "mco")
+high_otu <- filter_comparison %>%
+  filter(otu > total) %>%
+  mutate(diff = otu - total) 
+# 22 more OTUs - drop pan2021_HT_C01_Burn
 
-write.csv(df_final, "df_final.csv", row.names = F)
-```
+df_filt <- df_filt %>%
+  filter(sample_name != "pan2021_HT_C01_Burn")
 
-Remove NUMTs after aligning fasta file created above
-```{r}
-numt_free <- read.csv("mco_numt_edit.csv")
+write.csv(df_filt, "mco_final.csv", row.names = F)
 
-# 399 OTUs
-df_final %>%
-  filter(marker == "mco") %>%
-  distinct(otu)
+filter_comparison %>%
+  filter(!is.na(total)) %>%
+  mutate(dif = total - otu) %>% 
+  summarise(mean(dif), median(dif))
 
-# 374 OTUs
-length(numt_free$Name)
+filter_comparison %>%
+  filter(total == otu) 
+  summarise(mean(dif), median(dif))
 
-removed <- 399 - 374
-
-df_final <- 
-  df_final %>%
-  filter(otu %in% numt_free$Name)
-
-write.csv(df_final, "df_final.csv", row.names = F)
-```
-
-Image
-```{r}
-save.image("fire_cleanup.RData")
 ```
