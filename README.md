@@ -25,17 +25,24 @@ To run the following scripts:
 fire_analysis.Rmd
 
 Change the path to match your directory path for where the data is located.
-```bash
-docker run -it -v -p 8787:8787 -e PASSWORD=YOURNEWPASSWORD /Users/rjcmarkelz/Documents/Projects/THINK/git.repos/BIDS/edna-fire:/DATA/ rocker_geospatial_tidyverse_ape_vegan_bat_lulu /bin/bash
-```
+# ```bash
+# docker run -it -v -p 8787:8787 -e PASSWORD=YOURNEWPASSWORD /Users/rjcmarkelz/Documents/Projects/THINK/git.repos/BIDS/edna-fire:/DATA/ rocker_geospatial_tidyverse_ape_vegan_bat_lulu /bin/bash
+# ```
 
-```bash
-docker run --rm -v -p 8787:8787 -e PASSWORD=YOURNEWPASSWORD /Users/rjcmarkelz/Documents/Projects/THINK/git.repos/BIDS/edna-fire:/DATA/ rocker_geospatial_tidyverse_ape_vegan_bat_lulu
-```
-
+# ```bash
+# docker run --rm -v -p 8787:8787 -e PASSWORD=YOURNEWPASSWORD /Users/rjcmarkelz/Documents/Projects/THINK/git.repos/BIDS/edna-fire:/DATA/ rocker_geospatial_tidyverse_ape_vegan_bat_lulu
+# ```
 ```bash
 docker run --rm -p 8787:8787 -e PASSWORD=YOURNEWPASSWORD -v /Users/rjcmarkelz/Documents/Projects/THINK/git.repos/BIDS/edna-fire:/home/rstudio/DATA rocker_rstudio_tidy_devtools
 ```
+
+
+```bash
+docker run --rm -p 8787:8787 -e PASSWORD=YOURNEWPASSWORD -v /Users/rjcmarkelz/Documents/Projects/THINK/git.repos/BIDS/edna-fire:/home/rstudio/DATA  rocker/geospatial
+```
+
+
+
 
 
 # /data
@@ -122,11 +129,9 @@ Download base container.
 ```bash
 docker pull rocker/tidyverse
 docker run -it rocker/tidyverse /bin/bash
-
 docker run -it rocker/geospatial /bin/bash
-
-
 ```
+
 # inside container start an R session
 
 ```R
@@ -135,13 +140,16 @@ install.packages("ape")
 install.packages("vegan")
 install.packages("devtools")
 devtools::install_github("tobiasgf/lulu")  
-install.packages("venns", dependencies = TRUE)
+install.packages("venn", dependencies = TRUE)
+install.packages("coin")
 
 # load the packages to make sure they are working
 library(BAT)
-library(lulu)
 library(ape)
 library(vegan)
+library(lulu)
+library(venn)
+library(coin)
 library(tidyverse)
 
 sessionInfo(package = NULL)
@@ -160,27 +168,27 @@ sessionInfo(package = NULL)
 # [1] stats     graphics  grDevices utils     datasets  methods   base     
 # 
 # other attached packages:
-#  [1] forcats_0.5.1   stringr_1.4.0   dplyr_1.1.0     purrr_0.3.4     readr_2.0.1     tidyr_1.1.3     tibble_3.2.1    ggplot2_3.3.5   tidyverse_1.3.1 vegan_2.6-4    
-# [11] lattice_0.20-44 permute_0.9-7   ape_5.7-1       lulu_0.1.0      BAT_2.9.2      
+#  [1] coin_1.4-2      survival_3.2-11 forcats_0.5.1   stringr_1.4.0   dplyr_1.1.0     purrr_0.3.4     readr_2.0.1     tidyr_1.1.3     tibble_3.2.1    ggplot2_3.3.5  
+# [11] tidyverse_1.3.1 venn_1.11       lulu_0.1.0      vegan_2.6-4     lattice_0.20-44 permute_0.9-7   ape_5.7-1       BAT_2.9.2      
 # 
 # loaded via a namespace (and not attached):
-#   [1] colorspace_2.0-2     ellipsis_0.3.2       class_7.3-19         mclust_6.0.0         rprojroot_2.0.2      fs_1.5.0             rstudioapi_0.13     
-#   [8] proxy_0.4-26         listenv_0.8.0        remotes_2.4.0        prodlim_2019.11.13   fansi_0.5.0          mvtnorm_1.1-3        lubridate_1.9.2     
-#  [15] xml2_1.3.2           codetools_0.2-18     splines_4.1.1        doParallel_1.0.17    cachem_1.0.6         pkgload_1.2.1        jsonlite_1.7.2      
-#  [22] pROC_1.18.0          caret_6.0-94         broom_0.7.9          dbplyr_2.1.1         cluster_2.1.2        rgeos_0.5-5          httr_1.4.2          
-#  [29] compiler_4.1.1       backports_1.2.1      assertthat_0.2.1     Matrix_1.3-4         fastmap_1.1.0        cli_3.6.0            prettyunits_1.1.1   
-#  [36] tools_4.1.1          gtable_0.3.0         glue_1.6.2           reshape2_1.4.4       maps_3.3.0           Rcpp_1.0.7           cellranger_1.1.0    
-#  [43] raster_3.4-13        vctrs_0.6.0          nlme_3.1-152         iterators_1.0.14     timeDate_4022.108    gower_1.0.1          fastcluster_1.2.3   
-#  [50] globals_0.16.2       ps_1.6.0             proto_1.0.0          rvest_1.0.1          testthat_3.0.4       timechange_0.2.0     lifecycle_1.0.3     
-#  [57] devtools_2.4.2       future_1.32.0        terra_1.3-22         MASS_7.3-54          scales_1.1.1         ipred_0.9-14         hms_1.1.0           
-#  [64] parallel_4.1.1       curl_4.3.2           memoise_2.0.0        rpart_4.1-15         stringi_1.7.4        desc_1.3.0           foreach_1.5.2       
-#  [71] e1071_1.7-8          hypervolume_3.1.0    palmerpenguins_0.1.1 hardhat_1.2.0        pkgbuild_1.2.0       lava_1.7.2.1         geometry_0.4.5      
-#  [78] rlang_1.1.0          pkgconfig_2.0.3      pracma_2.4.2         ks_1.14.0            recipes_1.0.5        pdist_1.2.1          processx_3.5.2      
+#   [1] TH.data_1.1-1        colorspace_2.0-2     modeltools_0.2-23    ellipsis_0.3.2       class_7.3-19         mclust_6.0.0         fs_1.5.0            
+#   [8] rstudioapi_0.13      proxy_0.4-26         listenv_0.8.0        prodlim_2019.11.13   fansi_0.5.0          mvtnorm_1.1-3        lubridate_1.9.2     
+#  [15] xml2_1.3.2           codetools_0.2-18     splines_4.1.1        doParallel_1.0.17    libcoin_1.0-9        knitr_1.33           jsonlite_1.7.2      
+#  [22] pROC_1.18.0          caret_6.0-94         broom_0.7.9          cluster_2.1.2        dbplyr_2.1.1         rgeos_0.5-5          httr_1.4.2          
+#  [29] compiler_4.1.1       backports_1.2.1      assertthat_0.2.1     Matrix_1.3-4         fastmap_1.1.0        cli_3.6.0            admisc_0.31         
+#  [36] htmltools_0.5.2      prettyunits_1.1.1    tools_4.1.1          gtable_0.3.0         glue_1.6.2           reshape2_1.4.4       maps_3.3.0          
+#  [43] Rcpp_1.0.7           cellranger_1.1.0     raster_3.4-13        vctrs_0.6.0          nlme_3.1-152         iterators_1.0.14     timeDate_4022.108   
+#  [50] gower_1.0.1          xfun_0.25            fastcluster_1.2.3    globals_0.16.2       proto_1.0.0          rvest_1.0.1          timechange_0.2.0    
+#  [57] lifecycle_1.0.3      future_1.32.0        terra_1.3-22         zoo_1.8-9            MASS_7.3-54          scales_1.1.1         ipred_0.9-14        
+#  [64] hms_1.1.0            sandwich_3.0-2       parallel_4.1.1       yaml_2.2.1           rpart_4.1-15         stringi_1.7.4        foreach_1.5.2       
+#  [71] e1071_1.7-8          hypervolume_3.1.0    palmerpenguins_0.1.1 hardhat_1.2.0        lava_1.7.2.1         geometry_0.4.5       matrixStats_0.63.0  
+#  [78] rlang_1.1.0          pkgconfig_2.0.3      pracma_2.4.2         evaluate_0.14        ks_1.14.0            recipes_1.0.5        pdist_1.2.1         
 #  [85] tidyselect_1.2.0     parallelly_1.34.0    plyr_1.8.6           magrittr_2.0.1       nls2_0.3-3           R6_2.5.1             generics_0.1.3      
-#  [92] DBI_1.1.1            haven_2.4.3          mgcv_1.8-36          pillar_1.8.1         withr_2.4.2          survival_3.2-11      abind_1.4-5         
+#  [92] multcomp_1.4-23      DBI_1.1.1            haven_2.4.3          pillar_1.8.1         withr_2.4.2          mgcv_1.8-36          abind_1.4-5         
 #  [99] sp_1.4-5             nnet_7.3-16          future.apply_1.10.0  modelr_0.1.8         crayon_1.4.1         KernSmooth_2.23-20   utf8_1.2.2          
-# [106] tzdb_0.3.0           progress_1.2.2       usethis_2.0.1        readxl_1.3.1         grid_4.1.1           data.table_1.14.0    callr_3.7.0         
-# [113] ModelMetrics_1.2.2.2 reprex_2.0.1         digest_0.6.27        stats4_4.1.1         munsell_0.5.0        magic_1.5-9          sessioninfo_1.1.1  
+# [106] tzdb_0.3.0           rmarkdown_2.10       progress_1.2.2       readxl_1.3.1         grid_4.1.1           data.table_1.14.0    ModelMetrics_1.2.2.2
+# [113] reprex_2.0.1         digest_0.6.27        stats4_4.1.1         munsell_0.5.0        magic_1.5-9  
 
 citation("BAT")
 citation("lulu")

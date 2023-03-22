@@ -14,14 +14,13 @@ knitr::opts_knit$set(root.dir = '~/DATA/data')
 ```
 
 ```{r libraries}
-
-library(tidyverse)
-library(reshape2)
+library(BAT)
 library(ape)
 library(vegan)
-library(BAT)
+library(lulu)
 library(venn)
-
+library(coin)
+library(tidyverse)
 ```
 
 ```{r data}
@@ -205,7 +204,7 @@ t_status3 <-
 simp_p <- t_status3$p.value
 
 # Mood's Median
-library(coin)
+# library(coin)
 
 median_test(div ~ as.factor(status), diversity_rich)
 median_test(div ~ as.factor(status), diversity_shannon)
