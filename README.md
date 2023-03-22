@@ -195,7 +195,9 @@ citation("lulu")
 citation("ape")
 citation("vegan")
 citation("tidyverse")
-
+citation("venn")
+citation("coin")
+citation("devtools")
 ```
 
 Outside of container.
