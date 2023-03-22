@@ -41,8 +41,13 @@ docker run --rm -p 8787:8787 -e PASSWORD=YOURNEWPASSWORD -v /Users/rjcmarkelz/Do
 docker run --rm -p 8787:8787 -e PASSWORD=YOURNEWPASSWORD -v /Users/rjcmarkelz/Documents/Projects/THINK/git.repos/BIDS/edna-fire:/home/rstudio/DATA  rocker/geospatial
 ```
 
+Browser:
+http://localhost:8787/
 
+user: rstudio
+pass: YOURNEWPASSWORD 
 
+Once signed in. Tools -> Global Options -> Appearance -> Editor theme: Solarized Dark 
 
 
 # /data
