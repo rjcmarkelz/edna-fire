@@ -9,7 +9,7 @@ output:
 
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
-knitr::opts_knit$set(root.dir = 'F:/Research/rprojects/fire_project/') 
+knitr::opts_knit$set(root.dir = '~/DATA/data') 
 # How do we make this relative for reproducibility?
 ```
 

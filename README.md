@@ -26,7 +26,15 @@ fire_analysis.Rmd
 
 Change the path to match your directory path for where the data is located.
 ```bash
-docker run -it -v /Users/rjcmarkelz/Documents/Projects/THINK/git.repos/BIDS/DATA/Fire_Raw:/DATA/ rocker_geospatial_tidyverse_ape_vegan_bat_lulu /bin/bash
+docker run -it -v -p 8787:8787 -e PASSWORD=YOURNEWPASSWORD /Users/rjcmarkelz/Documents/Projects/THINK/git.repos/BIDS/edna-fire:/DATA/ rocker_geospatial_tidyverse_ape_vegan_bat_lulu /bin/bash
+```
+
+```bash
+docker run --rm -v -p 8787:8787 -e PASSWORD=YOURNEWPASSWORD /Users/rjcmarkelz/Documents/Projects/THINK/git.repos/BIDS/edna-fire:/DATA/ rocker_geospatial_tidyverse_ape_vegan_bat_lulu
+```
+
+```bash
+docker run --rm -p 8787:8787 -e PASSWORD=YOURNEWPASSWORD -v /Users/rjcmarkelz/Documents/Projects/THINK/git.repos/BIDS/edna-fire:/home/rstudio/DATA rocker_rstudio_tidy_devtools
 ```
 
 
@@ -125,10 +133,9 @@ docker run -it rocker/geospatial /bin/bash
 install.packages("BAT", dependencies = TRUE)
 install.packages("ape")
 install.packages("vegan")
-install.packages("BiocManager")
-# BiocManager::install(version = "3.14")
 install.packages("devtools")
 devtools::install_github("tobiasgf/lulu")  
+install.packages("venns", dependencies = TRUE)
 
 # load the packages to make sure they are working
 library(BAT)
@@ -141,71 +148,39 @@ sessionInfo(package = NULL)
 # R version 4.1.1 (2021-08-10)
 # Platform: x86_64-pc-linux-gnu (64-bit)
 # Running under: Ubuntu 20.04.3 LTS
-#
+# 
 # Matrix products: default
 # BLAS/LAPACK: /usr/lib/x86_64-linux-gnu/openblas-pthread/libopenblasp-r0.3.8.so
-#
+# 
 # locale:
-#  [1] LC_CTYPE=en_US.UTF-8       LC_NUMERIC=C
-#  [3] LC_TIME=en_US.UTF-8        LC_COLLATE=en_US.UTF-8
-#  [5] LC_MONETARY=en_US.UTF-8    LC_MESSAGES=C
-#  [7] LC_PAPER=en_US.UTF-8       LC_NAME=C
-#  [9] LC_ADDRESS=C               LC_TELEPHONE=C
-# [11] LC_MEASUREMENT=en_US.UTF-8 LC_IDENTIFICATION=C
-#
+#  [1] LC_CTYPE=en_US.UTF-8       LC_NUMERIC=C               LC_TIME=en_US.UTF-8        LC_COLLATE=en_US.UTF-8     LC_MONETARY=en_US.UTF-8    LC_MESSAGES=C             
+#  [7] LC_PAPER=en_US.UTF-8       LC_NAME=C                  LC_ADDRESS=C               LC_TELEPHONE=C             LC_MEASUREMENT=en_US.UTF-8 LC_IDENTIFICATION=C       
+# 
 # attached base packages:
-# [1] stats     graphics  grDevices utils     datasets  methods   base
-#
+# [1] stats     graphics  grDevices utils     datasets  methods   base     
+# 
 # other attached packages:
-#  [1] forcats_0.5.1   stringr_1.4.0   dplyr_1.0.7     purrr_0.3.4
-#  [5] readr_2.0.1     tidyr_1.1.3     tibble_3.1.8    ggplot2_3.3.5
-#  [9] tidyverse_1.3.1 vegan_2.6-2     lattice_0.20-44 permute_0.9-7
-# [13] ape_5.6-2       lulu_0.1.0      BAT_2.9.0
-#
+#  [1] forcats_0.5.1   stringr_1.4.0   dplyr_1.1.0     purrr_0.3.4     readr_2.0.1     tidyr_1.1.3     tibble_3.2.1    ggplot2_3.3.5   tidyverse_1.3.1 vegan_2.6-4    
+# [11] lattice_0.20-44 permute_0.9-7   ape_5.7-1       lulu_0.1.0      BAT_2.9.2      
+# 
 # loaded via a namespace (and not attached):
-#   [1] readxl_1.3.1         backports_1.2.1      plyr_1.8.6
-#   [4] sp_1.4-5             splines_4.1.1        listenv_0.8.0
-#   [7] usethis_2.1.6        digest_0.6.27        foreach_1.5.2
-#  [10] htmltools_0.5.2      fansi_0.5.0          magrittr_2.0.1
-#  [13] memoise_2.0.1        cluster_2.1.2        doParallel_1.0.17
-#  [16] ks_1.13.5            tzdb_0.1.2           remotes_2.4.2
-#  [19] recipes_1.0.1        globals_0.14.0       fastcluster_1.2.3
-#  [22] modelr_0.1.8         gower_1.0.0          hardhat_1.2.0
-#  [25] pdist_1.2.1          prettyunits_1.1.1    colorspace_2.0-2
-#  [28] rvest_1.0.1          haven_2.4.3          callr_3.7.0
-#  [31] crayon_1.4.1         jsonlite_1.7.2       survival_3.2-11
-#  [34] iterators_1.0.14     glue_1.6.2           gtable_0.3.0
-#  [37] ipred_0.9-13         pkgbuild_1.3.1       future.apply_1.9.0
-#  [40] maps_3.3.0           abind_1.4-5          scales_1.1.1
-#  [43] mvtnorm_1.1-3        DBI_1.1.1            miniUI_0.1.1.1
-#  [46] Rcpp_1.0.7           xtable_1.8-4         progress_1.2.2
-#  [49] palmerpenguins_0.1.1 magic_1.5-9          proxy_0.4-26
-#  [52] mclust_5.4.10        stats4_4.1.1         lava_1.6.10
-#  [55] prodlim_2019.11.13   profvis_0.3.7        htmlwidgets_1.5.3
-#  [58] httr_1.4.2           ellipsis_0.3.2       urlchecker_1.0.1
-#  [61] pkgconfig_2.0.3      nnet_7.3-16          dbplyr_2.1.1
-#  [64] utf8_1.2.2           caret_6.0-93         tidyselect_1.1.2
-#  [67] rlang_1.0.4          reshape2_1.4.4       later_1.3.0
-#  [70] cellranger_1.1.0     munsell_0.5.0        tools_4.1.1
-#  [73] cachem_1.0.6         cli_3.3.0            generics_0.1.3
-#  [76] devtools_2.4.4       broom_0.7.9          geometry_0.4.5
-#  [79] fastmap_1.1.0        ModelMetrics_1.2.2.2 processx_3.5.2
-#  [82] fs_1.5.2             future_1.22.1        nlme_3.1-152
-#  [85] mime_0.11            xml2_1.3.2           pracma_2.3.8
-#  [88] compiler_4.1.1       rstudioapi_0.13      curl_4.3.2
-#  [91] e1071_1.7-8          reprex_2.0.1         stringi_1.7.4
-#  [94] ps_1.6.0             rgeos_0.5-5          Matrix_1.3-4
-#  [97] vctrs_0.4.1          pillar_1.8.1         lifecycle_1.0.1
-# [100] data.table_1.14.0    raster_3.4-13        httpuv_1.6.2
-# [103] R6_2.5.1             promises_1.2.0.1     KernSmooth_2.23-20
-# [106] parallelly_1.27.0    sessioninfo_1.2.2    codetools_0.2-18
-# [109] MASS_7.3-54          assertthat_0.2.1     pkgload_1.3.0
-# [112] proto_1.0.0          rprojroot_2.0.2      withr_2.5.0
-# [115] mgcv_1.8-36          parallel_4.1.1       hms_1.1.0
-# [118] terra_1.3-22         grid_4.1.1           rpart_4.1-15
-# [121] timeDate_4021.104    class_7.3-19         nls2_0.3-3
-# [124] hypervolume_3.0.4    pROC_1.18.0          shiny_1.6.0
-# [127] lubridate_1.8.0
+#   [1] colorspace_2.0-2     ellipsis_0.3.2       class_7.3-19         mclust_6.0.0         rprojroot_2.0.2      fs_1.5.0             rstudioapi_0.13     
+#   [8] proxy_0.4-26         listenv_0.8.0        remotes_2.4.0        prodlim_2019.11.13   fansi_0.5.0          mvtnorm_1.1-3        lubridate_1.9.2     
+#  [15] xml2_1.3.2           codetools_0.2-18     splines_4.1.1        doParallel_1.0.17    cachem_1.0.6         pkgload_1.2.1        jsonlite_1.7.2      
+#  [22] pROC_1.18.0          caret_6.0-94         broom_0.7.9          dbplyr_2.1.1         cluster_2.1.2        rgeos_0.5-5          httr_1.4.2          
+#  [29] compiler_4.1.1       backports_1.2.1      assertthat_0.2.1     Matrix_1.3-4         fastmap_1.1.0        cli_3.6.0            prettyunits_1.1.1   
+#  [36] tools_4.1.1          gtable_0.3.0         glue_1.6.2           reshape2_1.4.4       maps_3.3.0           Rcpp_1.0.7           cellranger_1.1.0    
+#  [43] raster_3.4-13        vctrs_0.6.0          nlme_3.1-152         iterators_1.0.14     timeDate_4022.108    gower_1.0.1          fastcluster_1.2.3   
+#  [50] globals_0.16.2       ps_1.6.0             proto_1.0.0          rvest_1.0.1          testthat_3.0.4       timechange_0.2.0     lifecycle_1.0.3     
+#  [57] devtools_2.4.2       future_1.32.0        terra_1.3-22         MASS_7.3-54          scales_1.1.1         ipred_0.9-14         hms_1.1.0           
+#  [64] parallel_4.1.1       curl_4.3.2           memoise_2.0.0        rpart_4.1-15         stringi_1.7.4        desc_1.3.0           foreach_1.5.2       
+#  [71] e1071_1.7-8          hypervolume_3.1.0    palmerpenguins_0.1.1 hardhat_1.2.0        pkgbuild_1.2.0       lava_1.7.2.1         geometry_0.4.5      
+#  [78] rlang_1.1.0          pkgconfig_2.0.3      pracma_2.4.2         ks_1.14.0            recipes_1.0.5        pdist_1.2.1          processx_3.5.2      
+#  [85] tidyselect_1.2.0     parallelly_1.34.0    plyr_1.8.6           magrittr_2.0.1       nls2_0.3-3           R6_2.5.1             generics_0.1.3      
+#  [92] DBI_1.1.1            haven_2.4.3          mgcv_1.8-36          pillar_1.8.1         withr_2.4.2          survival_3.2-11      abind_1.4-5         
+#  [99] sp_1.4-5             nnet_7.3-16          future.apply_1.10.0  modelr_0.1.8         crayon_1.4.1         KernSmooth_2.23-20   utf8_1.2.2          
+# [106] tzdb_0.3.0           progress_1.2.2       usethis_2.0.1        readxl_1.3.1         grid_4.1.1           data.table_1.14.0    callr_3.7.0         
+# [113] ModelMetrics_1.2.2.2 reprex_2.0.1         digest_0.6.27        stats4_4.1.1         munsell_0.5.0        magic_1.5-9          sessioninfo_1.1.1  
 
 citation("BAT")
 citation("lulu")
@@ -217,12 +192,12 @@ citation("tidyverse")
 
 Outside of container.
 ```bash
-# get the nickname of the running container with the newly installed packages
+# docker container ID with the newly installed packages
 docker ps
-docker commit amazing_kepler rocker_geospatial_tidyverse_ape_vegan_bat_lulu
-docker images
 # REPOSITORY                                       TAG                     IMAGE ID       CREATED          SIZE
 # rocker_geospatial_tidyverse_ape_vegan_bat_lulu   latest                  c51e0fa4391c   29 seconds ago   5.15GB
+docker commit -m "rocker_geospatial_fire_edna" 57695fe41812  rocker_geospatial_fire_edna
+docker image ls
 ```
 
 Download base container.
