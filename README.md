@@ -212,7 +212,7 @@ Outside of container.
 docker ps
 # REPOSITORY                                       TAG                     IMAGE ID       CREATED          SIZE
 # rocker_geospatial_tidyverse_ape_vegan_bat_lulu   latest                  c51e0fa4391c   29 seconds ago   5.15GB
-docker commit -m "rocker_geospatial_fire_edna" 57695fe41812  rocker_geospatial_fire_edna
+docker commit -m "rocker_geospatial_fire_edna" 51b493fcf9c8 rocker_geospatial_fire_edna
 docker image ls
 ```
 
