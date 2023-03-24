@@ -232,7 +232,7 @@ sessionInfo(package = NULL)
 # [130] terra_1.3-22         grid_4.1.1           rpart_4.1-15        
 # [133] timeDate_4022.108    class_7.3-19         rmarkdown_2.10      
 # [136] nls2_0.3-3           hypervolume_3.1.0    carData_3.0-5       
-# [139] pROC_1.18.0          lubridate_1.9.2 
+# [139] pROC_1.18.0          lubridate_1.9.2
 
 citation("BAT")
 citation("lulu")
