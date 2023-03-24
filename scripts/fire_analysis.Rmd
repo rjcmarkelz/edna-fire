@@ -21,6 +21,8 @@ library(lulu)
 library(venn)
 library(coin)
 library(tidyverse)
+library(reshape2)
+library(ggpubr)
 ```
 
 ```{r data}
@@ -66,15 +68,15 @@ df_97$species <- species
 
 Add site data (should go in data clean up file?)
 ```{r} 
-
 sites <- df_97 %>%
   group_by(sample_name) %>%
   filter(row_number() == 1) %>%
-  select(site, year, sample_name, site_name, reserve, status, habitat) %>%
-  ungroup()
+  select(site, year, sample_name, site_name, reserve, status, habitat) 
+
+
 df_97 <- df_97 %>%
   mutate(site_name = toupper(paste0(reserve, status, site))) 
-  left_join(sites, by = c("site_name" = "site")) %>%
+  left_join(sites, df_97, by = c("site_name" = "site")) %>%
   ungroup()
 
 write.csv(sites, "site_data.csv", row.names = F)
@@ -99,7 +101,9 @@ families <- list(
                                & !is.na(df_97$family)])
   )
 
-venn(families, opacity = 0.4, zcolor = c("#d0681e","#1e74d0"))
+venn(families, opacity = 0.4, zcolor = c("#d0681e","#1e74d0"), ggplot = TRUE)
+ggsave("~/DATA/figures/family-venn.png")
+
 
 # Not included currently
 genera <- list(
@@ -109,8 +113,8 @@ genera <- list(
                                & !is.na(df_97$family)])
   )
 
-venn(genera, opacity = 0.4, zcolor = c("#d0681e","#1e74d0"))
-
+venn(genera, opacity = 0.4, zcolor = c("#d0681e","#1e74d0"), ggplot = TRUE)
+ggsave("~/DATA/figures/genera-venn.png")
 # Bars
 df_97 %>%
   filter(!is.na(order)) %>%
@@ -121,7 +125,10 @@ df_97 %>%
            stat = "identity", position = "dodge") +
   facet_grid(~year) +
   theme_minimal() +
-  theme(axis.text.x = element_text(angle = 90)) 
+  theme(axis.text.x = element_text(angle = 90)) +
+  ylab("Number (n)") + xlab("Order")
+ggsave("~/DATA/figures/order-level-counts.png")
+
 
 ```
 
@@ -251,6 +258,7 @@ x <- ggpubr::ggarrange(p1, p2, p3,
                        labels = c("Richness",
                                   "Shannon",
                                   "Simpson"))
+
 # T-test by year
 t_status1 <- 
   t.test(diversity_rich$div[diversity_rich$year == "pan2020"], 
@@ -316,8 +324,9 @@ diversity_shannon %>%
   geom_jitter(aes(color = habitat), alpha = 0.5) +
   facet_wrap(~ year) +
   theme_minimal() +
-  theme(axis.text.x = element_text(angle = 45)) 
-
+  theme(axis.text.x = element_text(angle = 45)) +
+  ylab("Shannon Diversity") + xlab("Habitat Type")
+ggsave("~/DATA/figures/shannon-diversity-habitat.png")
 ```
 
 Community analysis - 97
@@ -369,6 +378,7 @@ nmdseuc <-
   geom_point(aes(color = status), size = 1) +
   geom_text(aes(label = sample_name, color = status), size = 1) +
   theme_minimal()
+ggsave(plot = nmdseuc, "~/DATA/figures/nmdseuc.png")
 
 nmds <- metaMDS(dinc_mat, trymax = 100, distance = "jaccard")
 nmds_df <- 
@@ -380,6 +390,7 @@ nmdsjacc <-
   geom_point(aes(color = status), size = 1) +
   geom_text(aes(label = sample_name, color = status), size = 1) +
   theme_minimal()
+ggsave(plot = nmdsjacc, "~/DATA/figures/nmdseuc.png" )
 
 # Dataframe for permanova
 permanova_df <-

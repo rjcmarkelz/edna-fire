@@ -147,6 +147,7 @@ install.packages("devtools")
 devtools::install_github("tobiasgf/lulu")  
 install.packages("venn", dependencies = TRUE)
 install.packages("coin")
+install.packages("ggpubr")
 
 # load the packages to make sure they are working
 library(BAT)

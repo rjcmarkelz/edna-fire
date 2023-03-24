@@ -139,7 +139,8 @@ df_name <-
   mutate(year = sub("pan", "", year),
          id = paste0(reserve, site, year, "_", status))
 =======
-```{r final df - correcting error names}
+  
+```{r final df -  correcting error names}
 # Separate 
 fire <- df_lulu %>%
   filter(!grepl("LL", sample))
