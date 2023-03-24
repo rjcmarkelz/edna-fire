@@ -25,20 +25,20 @@ To run the following scripts:
 fire_analysis.Rmd
 
 Change the path to match your directory path for where the data is located.
-# ```bash
+<!-- # ```bash
 # docker run -it -v -p 8787:8787 -e PASSWORD=YOURNEWPASSWORD /Users/rjcmarkelz/Documents/Projects/THINK/git.repos/BIDS/edna-fire:/DATA/ rocker_geospatial_tidyverse_ape_vegan_bat_lulu /bin/bash
 # ```
 
 # ```bash
 # docker run --rm -v -p 8787:8787 -e PASSWORD=YOURNEWPASSWORD /Users/rjcmarkelz/Documents/Projects/THINK/git.repos/BIDS/edna-fire:/DATA/ rocker_geospatial_tidyverse_ape_vegan_bat_lulu
-# ```
-```bash
+# ``` -->
+<!-- ```bash
 docker run --rm -p 8787:8787 -e PASSWORD=YOURNEWPASSWORD -v /Users/rjcmarkelz/Documents/Projects/THINK/git.repos/BIDS/edna-fire:/home/rstudio/DATA rocker_rstudio_tidy_devtools
-```
+``` -->
 
 
 ```bash
-docker run --rm -p 8787:8787 -e PASSWORD=YOURNEWPASSWORD -v /Users/rjcmarkelz/Documents/Projects/THINK/git.repos/BIDS/edna-fire:/home/rstudio/DATA  rocker/geospatial
+docker run --rm -p 8787:8787 -e PASSWORD=YOURNEWPASSWORD -v /Users/rjcmarkelz/Documents/Projects/THINK/git.repos/BIDS/edna-fire:/home/rstudio/DATA  rocker_geospatial_fire_edna
 ```
 
 Browser:
