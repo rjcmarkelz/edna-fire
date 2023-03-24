@@ -228,7 +228,8 @@ p1 <- ggplot(diversity_rich, aes(status, div)) +
            label = paste0("p-value: ", round(t_status1$p.value, digits = 3)), 
            x = 2, y = 22) +
   scale_fill_manual(values = c("#d0681e","#1e74d0")) +
-  theme_minimal()
+  theme_minimal() + ylab("Diversity")
+ggsave(plot = p1, "~/DATA/figures/diversity_rich.png")
 
 p2 <- ggplot(diversity_shannon, aes(status, div)) +
   geom_boxplot(aes(fill = status), alpha = 0.6) +
@@ -239,7 +240,9 @@ p2 <- ggplot(diversity_shannon, aes(status, div)) +
            label = paste0("p-value: ", round(t_status2$p.value, digits = 3)), 
            x = 2, y = 3.5) +
   scale_fill_manual(values = c("#d0681e","#1e74d0")) +
-  theme_minimal()
+  theme_minimal() + ylab("Diversity")
+ggsave(plot = p2, "~/DATA/figures/diversity_shannon.png")
+
 
 p3 <- ggplot(diversity_simpson, aes(status, div)) +
   geom_boxplot(aes(fill = status), alpha = 0.6) +
@@ -250,7 +253,9 @@ p3 <- ggplot(diversity_simpson, aes(status, div)) +
            label = paste0("p-value: ", round(t_status3$p.value, digits = 3)), 
            x = 2, y = 1) + 
   scale_fill_manual(values = c("#d0681e","#1e74d0")) +
-  theme_minimal()
+  theme_minimal() + ylab("Diversity")
+ggsave(plot = p3, "~/DATA/figures/diversity_simpson.png")
+
 
 x <- ggpubr::ggarrange(p1, p2, p3,
                        ncol = 3,
@@ -258,7 +263,7 @@ x <- ggpubr::ggarrange(p1, p2, p3,
                        labels = c("Richness",
                                   "Shannon",
                                   "Simpson"))
-
+ggsave(plot = x, "~/DATA/figures/richness_shannon_simpson.png")
 # T-test by year
 t_status1 <- 
   t.test(diversity_rich$div[diversity_rich$year == "pan2020"], 
@@ -284,7 +289,9 @@ alpha_bar1 <-
   geom_jitter(aes(color = year), alpha = 0.5) +
   theme_minimal() +
   stat_summary(fun = mean, geom = "point", shape = 24, size= 4, 
-               color ="black", fill="white") 
+               color ="black", fill="white") +
+  ylab("Diversity") + xlab("Year")
+ggsave(plot = alpha_bar1, "~/DATA/figures/alpha-bar1.png")
 
 alpha_bar2 <- 
   diversity_shannon %>% 
@@ -297,7 +304,9 @@ alpha_bar2 <-
   annotate(geom = "text", 
            label = paste0("p-value: ", signif(t_status2$p.value, digits = 3)), 
            x = 1, y = 3.5) +
-  theme_minimal()
+  theme_minimal() +
+  ylab("Diversity") + xlab("Year")
+ggsave(plot = alpha_bar2, "~/DATA/figures/alpha-bar2.png")
 
 alpha_bar3 <- 
   diversity_simpson %>%
@@ -306,17 +315,23 @@ alpha_bar3 <-
   geom_jitter(aes(color = year), alpha = 0.5) +
   theme_minimal() +
   stat_summary(fun = mean, geom = "point", shape = 24, size= 4, 
-               color ="black", fill="white") 
+               color ="black", fill="white") +
+  ylab("Diversity") + xlab("Year")
+ggsave(plot = alpha_bar3, "~/DATA/figures/alpha-bar3.png")
 
 x2 <- ggpubr::ggarrange(alpha_bar1, alpha_bar2, alpha_bar3,
                        ncol = 3,
                        labels = c("Richness",
                                   "Shannon",
                                   "Simpson"), common.legend = T)
+x2
+ggsave(plot = x2, "~/DATA/figures/richness_shannon_simpson_2.png")
+
 x3 <- ggpubr::ggarrange(p2, alpha_bar2,
                         labels = c("Burn versus Unburn",
                                   "Fall versus Spring"))
-
+x3
+ggsave(plot = x3, "~/DATA/figures/burnvsunburn_fallvsspring.png")
 diversity_shannon %>% 
   filter(!is.na(habitat)) %>%
   ggplot(aes(habitat, div)) + 
@@ -390,7 +405,7 @@ nmdsjacc <-
   geom_point(aes(color = status), size = 1) +
   geom_text(aes(label = sample_name, color = status), size = 1) +
   theme_minimal()
-ggsave(plot = nmdsjacc, "~/DATA/figures/nmdseuc.png" )
+ggsave(plot = nmdsjacc, "~/DATA/figures/nmdsjacc.png" )
 
 # Dataframe for permanova
 permanova_df <-
