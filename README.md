@@ -157,44 +157,82 @@ library(lulu)
 library(venn)
 library(coin)
 library(tidyverse)
+library(ggpubr)
 
 sessionInfo(package = NULL)
 # R version 4.1.1 (2021-08-10)
 # Platform: x86_64-pc-linux-gnu (64-bit)
 # Running under: Ubuntu 20.04.3 LTS
-# 
+
 # Matrix products: default
 # BLAS/LAPACK: /usr/lib/x86_64-linux-gnu/openblas-pthread/libopenblasp-r0.3.8.so
-# 
+
 # locale:
-#  [1] LC_CTYPE=en_US.UTF-8       LC_NUMERIC=C               LC_TIME=en_US.UTF-8        LC_COLLATE=en_US.UTF-8     LC_MONETARY=en_US.UTF-8    LC_MESSAGES=C             
-#  [7] LC_PAPER=en_US.UTF-8       LC_NAME=C                  LC_ADDRESS=C               LC_TELEPHONE=C             LC_MEASUREMENT=en_US.UTF-8 LC_IDENTIFICATION=C       
-# 
+#  [1] LC_CTYPE=en_US.UTF-8       LC_NUMERIC=C              
+#  [3] LC_TIME=en_US.UTF-8        LC_COLLATE=en_US.UTF-8    
+#  [5] LC_MONETARY=en_US.UTF-8    LC_MESSAGES=C             
+#  [7] LC_PAPER=en_US.UTF-8       LC_NAME=C                 
+#  [9] LC_ADDRESS=C               LC_TELEPHONE=C            
+# [11] LC_MEASUREMENT=en_US.UTF-8 LC_IDENTIFICATION=C       
+
 # attached base packages:
 # [1] stats     graphics  grDevices utils     datasets  methods   base     
-# 
+
 # other attached packages:
-#  [1] coin_1.4-2      survival_3.2-11 forcats_0.5.1   stringr_1.4.0   dplyr_1.1.0     purrr_0.3.4     readr_2.0.1     tidyr_1.1.3     tibble_3.2.1    ggplot2_3.3.5  
-# [11] tidyverse_1.3.1 venn_1.11       lulu_0.1.0      vegan_2.6-4     lattice_0.20-44 permute_0.9-7   ape_5.7-1       BAT_2.9.2      
-# 
+#  [1] ggpubr_0.6.0    reshape2_1.4.4  forcats_0.5.1   stringr_1.5.0  
+#  [5] dplyr_1.1.0     purrr_1.0.1     readr_2.0.1     tidyr_1.3.0    
+#  [9] tibble_3.2.1    ggplot2_3.4.1   tidyverse_1.3.1 coin_1.4-2     
+# [13] survival_3.2-11 venn_1.11       lulu_0.1.0      vegan_2.6-4    
+# [17] lattice_0.20-44 permute_0.9-7   ape_5.7-1       BAT_2.9.2      
+
 # loaded via a namespace (and not attached):
-#   [1] TH.data_1.1-1        colorspace_2.0-2     modeltools_0.2-23    ellipsis_0.3.2       class_7.3-19         mclust_6.0.0         fs_1.5.0            
-#   [8] rstudioapi_0.13      proxy_0.4-26         listenv_0.8.0        prodlim_2019.11.13   fansi_0.5.0          mvtnorm_1.1-3        lubridate_1.9.2     
-#  [15] xml2_1.3.2           codetools_0.2-18     splines_4.1.1        doParallel_1.0.17    libcoin_1.0-9        knitr_1.33           jsonlite_1.7.2      
-#  [22] pROC_1.18.0          caret_6.0-94         broom_0.7.9          cluster_2.1.2        dbplyr_2.1.1         rgeos_0.5-5          httr_1.4.2          
-#  [29] compiler_4.1.1       backports_1.2.1      assertthat_0.2.1     Matrix_1.3-4         fastmap_1.1.0        cli_3.6.0            admisc_0.31         
-#  [36] htmltools_0.5.2      prettyunits_1.1.1    tools_4.1.1          gtable_0.3.0         glue_1.6.2           reshape2_1.4.4       maps_3.3.0          
-#  [43] Rcpp_1.0.7           cellranger_1.1.0     raster_3.4-13        vctrs_0.6.0          nlme_3.1-152         iterators_1.0.14     timeDate_4022.108   
-#  [50] gower_1.0.1          xfun_0.25            fastcluster_1.2.3    globals_0.16.2       proto_1.0.0          rvest_1.0.1          timechange_0.2.0    
-#  [57] lifecycle_1.0.3      future_1.32.0        terra_1.3-22         zoo_1.8-9            MASS_7.3-54          scales_1.1.1         ipred_0.9-14        
-#  [64] hms_1.1.0            sandwich_3.0-2       parallel_4.1.1       yaml_2.2.1           rpart_4.1-15         stringi_1.7.4        foreach_1.5.2       
-#  [71] e1071_1.7-8          hypervolume_3.1.0    palmerpenguins_0.1.1 hardhat_1.2.0        lava_1.7.2.1         geometry_0.4.5       matrixStats_0.63.0  
-#  [78] rlang_1.1.0          pkgconfig_2.0.3      pracma_2.4.2         evaluate_0.14        ks_1.14.0            recipes_1.0.5        pdist_1.2.1         
-#  [85] tidyselect_1.2.0     parallelly_1.34.0    plyr_1.8.6           magrittr_2.0.1       nls2_0.3-3           R6_2.5.1             generics_0.1.3      
-#  [92] multcomp_1.4-23      DBI_1.1.1            haven_2.4.3          pillar_1.8.1         withr_2.4.2          mgcv_1.8-36          abind_1.4-5         
-#  [99] sp_1.4-5             nnet_7.3-16          future.apply_1.10.0  modelr_0.1.8         crayon_1.4.1         KernSmooth_2.23-20   utf8_1.2.2          
-# [106] tzdb_0.3.0           rmarkdown_2.10       progress_1.2.2       readxl_1.3.1         grid_4.1.1           data.table_1.14.0    ModelMetrics_1.2.2.2
-# [113] reprex_2.0.1         digest_0.6.27        stats4_4.1.1         munsell_0.5.0        magic_1.5-9  
+#   [1] readxl_1.3.1         backports_1.2.1      plyr_1.8.6          
+#   [4] sp_1.4-5             splines_4.1.1        listenv_0.8.0       
+#   [7] usethis_2.0.1        TH.data_1.1-1        digest_0.6.27       
+#  [10] htmltools_0.5.2      foreach_1.5.2        fansi_0.5.0         
+#  [13] memoise_2.0.0        magrittr_2.0.1       cluster_2.1.2       
+#  [16] doParallel_1.0.17    ks_1.14.0            remotes_2.4.0       
+#  [19] tzdb_0.3.0           recipes_1.0.5        globals_0.16.2      
+#  [22] fastcluster_1.2.3    modelr_0.1.8         gower_1.0.1         
+#  [25] matrixStats_0.63.0   sandwich_3.0-2       hardhat_1.2.0       
+#  [28] timechange_0.2.0     pdist_1.2.1          prettyunits_1.1.1   
+#  [31] colorspace_2.0-2     rvest_1.0.1          haven_2.4.3         
+#  [34] xfun_0.25            callr_3.7.0          crayon_1.4.1        
+#  [37] jsonlite_1.7.2       libcoin_1.0-9        zoo_1.8-9           
+#  [40] iterators_1.0.14     glue_1.6.2           gtable_0.3.0        
+#  [43] ipred_0.9-14         pkgbuild_1.2.0       car_3.1-1           
+#  [46] future.apply_1.10.0  maps_3.3.0           abind_1.4-5         
+#  [49] scales_1.2.1         mvtnorm_1.1-3        DBI_1.1.1           
+#  [52] rstatix_0.7.2        Rcpp_1.0.7           progress_1.2.2      
+#  [55] palmerpenguins_0.1.1 magic_1.5-9          proxy_0.4-26        
+#  [58] mclust_6.0.0         stats4_4.1.1         lava_1.7.2.1        
+#  [61] prodlim_2019.11.13   httr_1.4.2           ellipsis_0.3.2      
+#  [64] modeltools_0.2-23    farver_2.1.0         pkgconfig_2.0.3     
+#  [67] nnet_7.3-16          dbplyr_2.1.1         utf8_1.2.2          
+#  [70] caret_6.0-94         tidyselect_1.2.0     labeling_0.4.2      
+#  [73] rlang_1.1.0          cachem_1.0.6         munsell_0.5.0       
+#  [76] cellranger_1.1.0     tools_4.1.1          cli_3.6.0           
+#  [79] generics_0.1.3       devtools_2.4.2       broom_0.7.9         
+#  [82] fastmap_1.1.0        evaluate_0.14        geometry_0.4.5      
+#  [85] yaml_2.2.1           processx_3.5.2       ModelMetrics_1.2.2.2
+#  [88] knitr_1.33           fs_1.5.0             admisc_0.31         
+#  [91] future_1.32.0        nlme_3.1-152         pracma_2.4.2        
+#  [94] xml2_1.3.2           compiler_4.1.1       rstudioapi_0.13     
+#  [97] testthat_3.0.4       e1071_1.7-8          ggsignif_0.6.4      
+# [100] reprex_2.0.1         stringi_1.7.4        ps_1.6.0            
+# [103] desc_1.3.0           rgeos_0.5-5          Matrix_1.5-3        
+# [106] vctrs_0.6.0          pillar_1.8.1         lifecycle_1.0.3     
+# [109] BiocManager_1.30.16  cowplot_1.1.1        data.table_1.14.0   
+# [112] raster_3.4-13        R6_2.5.1             gridExtra_2.3       
+# [115] KernSmooth_2.23-20   parallelly_1.34.0    sessioninfo_1.1.1   
+# [118] codetools_0.2-18     ggpolypath_0.2.0     pkgload_1.2.1       
+# [121] MASS_7.3-54          assertthat_0.2.1     proto_1.0.0         
+# [124] rprojroot_2.0.2      withr_2.5.0          multcomp_1.4-23     
+# [127] mgcv_1.8-36          parallel_4.1.1       hms_1.1.0           
+# [130] terra_1.3-22         grid_4.1.1           rpart_4.1-15        
+# [133] timeDate_4022.108    class_7.3-19         rmarkdown_2.10      
+# [136] nls2_0.3-3           hypervolume_3.1.0    carData_3.0-5       
+# [139] pROC_1.18.0          lubridate_1.9.2 
 
 citation("BAT")
 citation("lulu")
@@ -204,6 +242,7 @@ citation("tidyverse")
 citation("venn")
 citation("coin")
 citation("devtools")
+citation("ggpubr")
 ```
 
 Outside of container.
