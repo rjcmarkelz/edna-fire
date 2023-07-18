@@ -9,20 +9,20 @@ output:
 
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
-knitr::opts_knit$set(root.dir = '~/DATA/data') 
+knitr::opts_knit$set(root.dir = 'F:/Research/rprojects/fire_project/') 
 # How do we make this relative for reproducibility?
 ```
 
 ```{r libraries}
-library(BAT)
-library(ape)
-library(vegan)
-library(lulu)
-library(venn)
-library(coin)
+
 library(tidyverse)
 library(reshape2)
+library(ape)
+library(vegan)
+library(BAT)
+library(venn)
 library(ggpubr)
+
 ```
 
 ```{r data}
@@ -30,57 +30,6 @@ getwd()
 # Produced from cleanup
 df_97 <- read.csv("mco_97_wsites.csv")
 sites <- read.csv("site_data.csv")
-
-```
-
-Corrected BLAST (should go in data clean up file?)
-```{r}
-
-family <- vector()
-genus <- vector()
-species <- vector()
-
-for (i in 1:length(df_97$family)){
-  if (df_97$percent[i] > 99){
-    family[i] <- df_97$family[i]
-    genus[i] <- df_97$genus_blast[i]
-    species[i] <- df_97$species_blast[i]
-  } else if (df_97$percent[i] > 97){
-    family[i] <- df_97$family[i]
-    genus[i] <- df_97$genus_blast[i]
-    species[i] <- NA
-  } else if (df_97$percent[i] > 95){
-    family[i] <- df_97$family[i]
-    genus[i] <- NA
-    species[i] <- NA
-  } else {
-    family[i] <- NA
-    genus[i] <- NA
-    species[i] <- NA
-  }
-}
-
-df_97$family <- family
-df_97$genus <- genus
-df_97$species <- species
-
-```
-
-Add site data (should go in data clean up file?)
-```{r} 
-sites <- df_97 %>%
-  group_by(sample_name) %>%
-  filter(row_number() == 1) %>%
-  select(site, year, sample_name, site_name, reserve, status, habitat) 
-
-
-df_97 <- df_97 %>%
-  mutate(site_name = toupper(paste0(reserve, status, site))) 
-  left_join(sites, df_97, by = c("site_name" = "site")) %>%
-  ungroup()
-
-write.csv(sites, "site_data.csv", row.names = F)
-write.csv(df_97, "mco_97_wsites.csv", row.names = F)
 
 ```
 
@@ -101,9 +50,7 @@ families <- list(
                                & !is.na(df_97$family)])
   )
 
-venn(families, opacity = 0.4, zcolor = c("#d0681e","#1e74d0"), ggplot = TRUE)
-ggsave("~/DATA/figures/family-venn.png")
-
+venn(families, opacity = 0.4, zcolor = c("#d0681e","#1e74d0"))
 
 # Not included currently
 genera <- list(
@@ -113,22 +60,43 @@ genera <- list(
                                & !is.na(df_97$family)])
   )
 
-venn(genera, opacity = 0.4, zcolor = c("#d0681e","#1e74d0"), ggplot = TRUE)
-ggsave("~/DATA/figures/genera-venn.png")
-# Bars
-df_97 %>%
-  filter(!is.na(order)) %>%
-  group_by(order, status, year) %>%
-  summarise(n = n_distinct(otu)) %>%
-  ggplot() +
-  geom_bar(aes(order, n, fill = status), 
-           stat = "identity", position = "dodge") +
-  facet_grid(~year) +
-  theme_minimal() +
-  theme(axis.text.x = element_text(angle = 90)) +
-  ylab("Number (n)") + xlab("Order")
-ggsave("~/DATA/figures/order-level-counts.png")
+venn(genera, opacity = 0.4, zcolor = c("#d0681e","#1e74d0"))
 
+# Bars
+library(viridis)
+colors <- rocket(n = 11, begin = 1, end = 0)
+
+order_bar <- 
+  df_97 %>%
+  filter(!is.na(order)) %>%
+  group_by(year, order, status) %>%
+  summarise(n = n_distinct(otu)) %>% 
+  ungroup() %>%
+  arrange(year, desc(n)) %>%
+  mutate(order = factor(order, levels = unique(order))) %>%
+  mutate(year = ifelse(year == "pan2020", "Fall 2020", "Spring 2021")) %>%
+  mutate(status = ifelse(status == "Burn", "Burned", "Unburned")) %>%
+  rename(Order = order) %>%
+  ggplot(aes(x = year, y = n, fill = Order)) +
+  geom_bar(stat = "identity",  color = "black", alpha = 0.8) + 
+  facet_grid(~status) +
+  theme_minimal() +
+  #theme(axis.text.x = element_text(angle = 45)) +
+  scale_fill_manual(values = colors) +
+  ylab("Number of OTUs") +
+  xlab("")
+
+ggsave("family_bar.png", width = 6, height = 4, units = "in")
+
+```
+
+Site summary
+```{r habitat}
+df_filtered <-
+  df_97 %>%
+  filter(reserve != "QR" & !is.na(habitat) 
+         & habitat %in% c("Oak Woodland", "Scrub", "Grassland")) %>%
+  ungroup()
 
 ```
 
@@ -137,7 +105,7 @@ Hypothesis 1: Species richness will not be different between burned and unburned
 
 # Create dataframe with reads by OTU at each site and year
 otu_counts <- 
-  df_97 %>%
+  df_filtered %>%
   group_by(sample_name, otu) %>%
   # Remove multiple rows
   filter(row_number() == 1) %>%
@@ -160,13 +128,42 @@ diversity_shannon <- as.data.frame(vegan::diversity(hell_mat, index = "shannon")
     rownames_to_column(var = "id")
 colnames(diversity_shannon) <- c("sample_name", "div")
 
+hist_shannon <- 
+  diversity_shannon %>%
+  ggplot(aes(div)) + 
+  geom_histogram(bins = 10, color = "black", alpha = 0.5) +
+  theme(title = "Distribution - Shannon index") +
+  xlab("Shannon index") +
+  ylab("Count") +
+  theme_minimal()
+
 diversity_simpson <- as.data.frame(vegan::diversity(hell_mat, index = "simpson")) %>%
     rownames_to_column(var = "id")
 colnames(diversity_simpson) <- c("sample_name", "div")
 
+hist_simp <- 
+  diversity_simpson %>%
+  ggplot(aes(div)) + 
+  geom_histogram(bins = 10, color = "black", alpha = 0.5) +
+  theme(title = "Distribution - Simpson index") +
+  xlab("Simpson index") +
+  ylab("Count") +
+  theme_minimal()
+
 diversity_rich <- as.data.frame(BAT::alpha(hell_mat)) %>%
   rownames_to_column(var = "id")
 colnames(diversity_rich) <- c("sample_name", "div")
+
+hist_rich <- 
+  diversity_rich %>%
+  ggplot(aes(div)) + 
+  geom_histogram(bins = 10, color = "black", alpha = 0.5) +
+  theme(title = "Richness") +
+  xlab("Richness") +
+  ylab("Count") +
+  theme_minimal()
+
+hist_alpha <- ggarrange(hist_shannon, hist_simp, hist_rich, ncol = 3)
 
 # Join diversity with site data
 diversity_rich <- 
@@ -193,25 +190,23 @@ var.test(diversity_simpson$div[diversity_simpson$status == "Burn"],
 
 # T-test
 t_status1 <- 
-  t.test(diversity_rich$div[diversity_rich$status == "Burn"], 
-         diversity_rich$div[diversity_rich$status == "Unburn"],
-       var.equal = TRUE)
+  wilcox.test(diversity_rich$div[diversity_rich$status == "Burn"], 
+         diversity_rich$div[diversity_rich$status == "Unburn"])
 rich_p <- t_status1$p.value
 
 t_status2 <- 
-  t.test(diversity_shannon$div[diversity_shannon$status == "Burn"], 
-         diversity_shannon$div[diversity_shannon$status == "Unburn"],
-       var.equal = TRUE)
+  wilcox.test(diversity_shannon$div[diversity_shannon$status == "Burn"], 
+         diversity_shannon$div[diversity_shannon$status == "Unburn"])
 shan_p <- t_status2$p.value
 
 t_status3 <- 
-  t.test(diversity_simpson$div[diversity_simpson$status == "Burn"], 
-         diversity_simpson$div[diversity_simpson$status == "Unburn"],
-       var.equal = TRUE)
+  wilcox.test(diversity_simpson$div[diversity_simpson$status == "Burn"], 
+         diversity_simpson$div[diversity_simpson$status == "Unburn"])
+
 simp_p <- t_status3$p.value
 
 # Mood's Median
-# library(coin)
+library(coin)
 
 median_test(div ~ as.factor(status), diversity_rich)
 median_test(div ~ as.factor(status), diversity_shannon)
@@ -220,65 +215,64 @@ median_test(div ~ as.factor(status), diversity_simpson)
 
 # Plots c("#d0681e","#1e74d0")
 p1 <- ggplot(diversity_rich, aes(status, div)) +
-  geom_boxplot(aes(fill = status), alpha = 0.6) +
+  geom_violin(aes(fill = status), alpha = 0.6) +
   geom_jitter(alpha = 0.3) +
-  stat_summary(fun = mean, geom = "point", shape = 24, size = 4, 
+  stat_summary(fun = mean, geom = "point", shape = 24, size = 2, 
                color = "black", fill = "white" ) +
   annotate(geom="text", 
-           label = paste0("p-value: ", round(t_status1$p.value, digits = 3)), 
-           x = 2, y = 22) +
+           label = paste0("p-value: ", round(rich_p, digits = 7)), 
+           x = 2, y = 32) +
   scale_fill_manual(values = c("#d0681e","#1e74d0")) +
-  theme_minimal() + ylab("Diversity")
-ggsave(plot = p1, "~/DATA/figures/diversity_rich.png")
+  ylab("Richness") +
+  xlab("") +
+  theme_minimal()
 
 p2 <- ggplot(diversity_shannon, aes(status, div)) +
-  geom_boxplot(aes(fill = status), alpha = 0.6) +
+  geom_violin(aes(fill = status), alpha = 0.6) +
   geom_jitter(alpha = 0.3) +
-  stat_summary(fun = mean, geom = "point", shape = 24, size = 4, 
+  stat_summary(fun = mean, geom = "point", shape = 24, size = 2, 
                color = "black", fill = "white" ) +
   annotate(geom="text", 
-           label = paste0("p-value: ", round(t_status2$p.value, digits = 3)), 
+           label = paste0("p-value: ", round(shan_p, digits = 3)), 
            x = 2, y = 3.5) +
   scale_fill_manual(values = c("#d0681e","#1e74d0")) +
-  theme_minimal() + ylab("Diversity")
-ggsave(plot = p2, "~/DATA/figures/diversity_shannon.png")
-
+  ylab("Shannon Diversity") +
+  xlab("") +
+  theme_minimal()
 
 p3 <- ggplot(diversity_simpson, aes(status, div)) +
-  geom_boxplot(aes(fill = status), alpha = 0.6) +
+  geom_violin(aes(fill = status), alpha = 0.6) +
   geom_jitter(alpha = 0.3) +
-  stat_summary(fun = mean, geom = "point", shape = 24, size = 4, 
+  stat_summary(fun = mean, geom = "point", shape = 24, size = 2, 
                color = "black", fill = "white" ) +
   annotate(geom="text", 
-           label = paste0("p-value: ", round(t_status3$p.value, digits = 3)), 
-           x = 2, y = 1) + 
+           label = paste0("p-value: ", round(simp_p, digits = 4)), 
+           x = 1.8, y = 1) + 
   scale_fill_manual(values = c("#d0681e","#1e74d0")) +
-  theme_minimal() + ylab("Diversity")
-ggsave(plot = p3, "~/DATA/figures/diversity_simpson.png")
-
+  ylab("Simpson Diversity") +
+  xlab("") +
+  theme_minimal()
 
 x <- ggpubr::ggarrange(p1, p2, p3,
                        ncol = 3,
-                       common.legend = TRUE,
-                       labels = c("Richness",
-                                  "Shannon",
-                                  "Simpson"))
-ggsave(plot = x, "~/DATA/figures/richness_shannon_simpson.png")
+                       common.legend = TRUE)
 # T-test by year
-t_status1 <- 
-  t.test(diversity_rich$div[diversity_rich$year == "pan2020"], 
-         diversity_rich$div[diversity_rich$year == "pan2021"],
-       var.equal = TRUE)
+# T-test
+status1 <- 
+  wilcox.test(diversity_rich$div[diversity_rich$year == "pan2020"], 
+         diversity_rich$div[diversity_rich$year == "pan2021"])
+rich_p <- t_status1$p.value
 
 t_status2 <- 
-  t.test(diversity_shannon$div[diversity_rich$year == "pan2020"], 
-         diversity_shannon$div[diversity_rich$year == "pan2021"],
-       var.equal = TRUE)
+  wilcox.test(diversity_shannon$div[diversity_rich$year == "pan2020"], 
+         diversity_shannon$div[diversity_rich$year == "pan2021"])
+shan_p <- t_status2$p.value
 
 t_status3 <- 
-  t.test(diversity_simpson$div[diversity_rich$year == "pan2020"], 
-         diversity_simpson$div[diversity_rich$year == "pan2021"],
-       var.equal = TRUE)
+  wilcox.test(diversity_simpson$div[diversity_rich$year == "pan2020"], 
+         diversity_simpson$div[diversity_rich$year == "pan2021"])
+
+simp_p <- t_status3$p.value
 
 # Figure
 # Facet by year, fill by status 
@@ -289,9 +283,7 @@ alpha_bar1 <-
   geom_jitter(aes(color = year), alpha = 0.5) +
   theme_minimal() +
   stat_summary(fun = mean, geom = "point", shape = 24, size= 4, 
-               color ="black", fill="white") +
-  ylab("Diversity") + xlab("Year")
-ggsave(plot = alpha_bar1, "~/DATA/figures/alpha-bar1.png")
+               color ="black", fill="white") 
 
 alpha_bar2 <- 
   diversity_shannon %>% 
@@ -304,9 +296,7 @@ alpha_bar2 <-
   annotate(geom = "text", 
            label = paste0("p-value: ", signif(t_status2$p.value, digits = 3)), 
            x = 1, y = 3.5) +
-  theme_minimal() +
-  ylab("Diversity") + xlab("Year")
-ggsave(plot = alpha_bar2, "~/DATA/figures/alpha-bar2.png")
+  theme_minimal()
 
 alpha_bar3 <- 
   diversity_simpson %>%
@@ -315,69 +305,71 @@ alpha_bar3 <-
   geom_jitter(aes(color = year), alpha = 0.5) +
   theme_minimal() +
   stat_summary(fun = mean, geom = "point", shape = 24, size= 4, 
-               color ="black", fill="white") +
-  ylab("Diversity") + xlab("Year")
-ggsave(plot = alpha_bar3, "~/DATA/figures/alpha-bar3.png")
+               color ="black", fill="white") 
 
 x2 <- ggpubr::ggarrange(alpha_bar1, alpha_bar2, alpha_bar3,
                        ncol = 3,
                        labels = c("Richness",
                                   "Shannon",
                                   "Simpson"), common.legend = T)
-x2
-ggsave(plot = x2, "~/DATA/figures/richness_shannon_simpson_2.png")
-
 x3 <- ggpubr::ggarrange(p2, alpha_bar2,
                         labels = c("Burn versus Unburn",
                                   "Fall versus Spring"))
-x3
-ggsave(plot = x3, "~/DATA/figures/burnvsunburn_fallvsspring.png")
-diversity_shannon %>% 
+
+habitat <- c("#ACC3A6", "#8E4677", "#F5D6BA", "#B6547D","#3F3F78")
+habitat_div <- 
+  diversity_shannon %>% 
   filter(!is.na(habitat)) %>%
-  ggplot(aes(habitat, div)) + 
-  geom_boxplot(aes(fill = habitat), alpha = 0.7) +
-  geom_jitter(aes(color = habitat), alpha = 0.5) +
-  facet_wrap(~ year) +
-  theme_minimal() +
-  theme(axis.text.x = element_text(angle = 45)) +
-  ylab("Shannon Diversity") + xlab("Habitat Type")
-ggsave("~/DATA/figures/shannon-diversity-habitat.png")
-```
-
-Community analysis - 97
-```{r calculate distances}
-
-# Create dataframe with reads by OTU at each site and year
-otu_counts_97 <- 
-  df_97 %>%
-  filter(reserve != "QR") %>%
-  filter(habitat %in% c("Grassland", "Scrub", 
-                        "Oak Woodland", "Chamise")) %>%
-  group_by(sample_name, otu) %>%
-  # Remove multiple rows
-  filter(row_number() == 1) %>%
-  # Use reads across all replicates
-  summarise(otu_count = sum(rep_combined)) %>%
-  ungroup() 
-
-# Create Hellinger, incidence matrix
-otu97_mat <-
-  otu_counts_97 %>%
-  select(sample_name, otu, otu_count) %>%
-  acast(sample_name ~ otu, fill = 0)
-
-hell97_mat <- decostand(otu97_mat, method = "hellinger")
-
-inc97_mat <- hell97_mat
-inc97_mat[inc97_mat > 0] <- 1
+  mutate(year = ifelse(year == "pan2020", "Fall 2020", "Spring 2021")) %>%
+  ggplot(aes(year, div)) + 
+  geom_boxplot(aes(fill = habitat), color = "black", alpha = 0.8, width = 0.5) +
+  geom_jitter(alpha = 0.4) +
+  stat_summary(aes(group = habitat),
+               fun = median,
+               geom = "line",
+               alpha = 0.7,
+               linewidth = 0.7) +
+  facet_grid(habitat ~ status, as.table = TRUE) +
+  scale_fill_manual(values = habitat) +
+  theme_classic() +
+  ylab("Shannon Diversity") +
+  xlab("") +
+  theme(axis.text.x = element_text(angle = 45, 
+                                   size = 8, 
+                                   margin = margin(t = 14)),
+        legend.position = "none")
+ggsave("richness_habitat.png", width = 4, height = 5, units = "in")
 
 ```
 
 Hypothesis 2: Burned and unburned sites will differ compositionally, using MOTUs
 ```{r ordination, adonis, betadis}
+fire_color <- c( "#E47B3A", "#385653")
+# Three or more OTUs per site
+otu_counts_filt <- 
+  df_filtered %>%
+  group_by(sample_name) %>%
+  filter(n_distinct(otu) >= 3) %>%
+  ungroup() %>%
+  group_by(sample_name, otu) %>%
+  # Remove multiple rows
+  filter(row_number() == 1) %>%
+  # Use reads across all replicates
+  summarise(otu_count = sum(rep_combined)) %>%
+  ungroup()
 
-dhell_mat <- hell97_mat
-dinc_mat <- inc97_mat
+# Create Hellinger, incidence matrix
+otu_mat_filt <-
+  otu_counts_filt %>%
+  select(sample_name, otu, otu_count) %>%
+  acast(sample_name ~ otu, fill = 0)
+
+hell_mat_filt <- decostand(otu_mat_filt, method = "hellinger")
+inc_mat_filt <- otu_mat_filt
+inc_mat_filt[inc_mat_filt > 0] <- 1
+
+dhell_mat <- hell_mat_filt
+dinc_mat <- inc_mat_filt
 
 # NMDS exploration - Hellinger distances
 x <- .Random.seed
@@ -385,7 +377,7 @@ nmds <- metaMDS(dhell_mat, distance = "euclidean",
                 trymax = 100) # Only did 100 because it fails regardless with outliers
 nmds_df <- 
   as_tibble(nmds$points, rownames = "sample_name") %>%
-  left_join(df_97, by = "sample_name")
+  left_join(df_filtered, by = "sample_name")
 
 nmdseuc <- 
   nmds_df %>%
@@ -393,23 +385,23 @@ nmdseuc <-
   geom_point(aes(color = status), size = 1) +
   geom_text(aes(label = sample_name, color = status), size = 1) +
   theme_minimal()
-ggsave(plot = nmdseuc, "~/DATA/figures/nmdseuc.png")
 
 nmds <- metaMDS(dinc_mat, trymax = 100, distance = "jaccard")
 nmds_df <- 
   as_tibble(nmds$points, rownames = "sample_name") %>%
-  left_join(df_97, by = "sample_name")
+  left_join(df_filtered, by = "sample_name")
 nmdsjacc <- 
   nmds_df %>%
   ggplot(aes(x = MDS1, y = MDS2, color = status)) + 
   geom_point(aes(color = status), size = 1) +
   geom_text(aes(label = sample_name, color = status), size = 1) +
   theme_minimal()
-ggsave(plot = nmdsjacc, "~/DATA/figures/nmdsjacc.png" )
+
+nmds_supp <- ggarrange(nmdseuc, nmdsjacc, labels = c("Hellinger Standardized", "Incidence"), common.legend = TRUE)
 
 # Dataframe for permanova
 permanova_df <-
-  df_97 %>%
+  df_filtered %>%
   group_by(sample_name) %>%
   filter(row_number() == 1) %>%
   filter(sample_name %in% rownames(as.matrix(dhell_mat)))
@@ -421,9 +413,11 @@ adonis_total_hell <- adonis2(dhell_mat ~ year*status*habitat*reserve,
 adonis_total_jac <- adonis2(dinc_mat ~ year*status*habitat*reserve,
                         method = "jaccard", data = permanova_df, 
                         permutations = 1000)
+library(gt)
+as.data.frame(adonis_total_hell) %>% rownames_to_column(var = "Predictor") %>% select(-Df) %>% gt()
+as.data.frame(adonis_total_jac) %>% rownames_to_column(var = "Predictor") %>% select(-Df) %>% gt()
 
 # PERMDISP
-
 jac <- vegdist(dinc_mat, method = "jaccard")
 euc <- vegdist(dhell_mat, method = "euclidean")
 
@@ -432,8 +426,7 @@ anova(betadisper(euc, permanova_df$status))
 
 # Without outliers
 outliers <- c("pan2021_BC_S01_Unburn",
-              "pan2020_ML_O01_Burn",
-              "pan2021_HT_G04_Burn")
+              "pan2020_ML_O01_Burn")
 
 mat_outlier_i <- 
   subset(dinc_mat, !rownames(dinc_mat) %in% outliers)
@@ -447,34 +440,48 @@ nmds_outlier_euc <- metaMDS(mat_outlier_h, dist = "euclidean", trymax = 1000,
                             k = 3, noshare = TRUE)
 
 nmds_df <- 
-  as_tibble(nmds_outlier_jac$points, rownames = "sample_name") %>%
-  left_join(df_97, by = "sample_name")
+  as_tibble(nmds_outlier_euc$points, rownames = "sample_name") %>%
+  left_join(df_filtered, by = "sample_name")
+
+fire_color <- c( "#E47B3A", "#385653")
 
 nmds_jac <- 
   nmds_df %>%
   ggplot(aes(x = MDS1, y = MDS2, color = status)) + 
   #geom_text(aes(label = sample_name), size = 1) +
   geom_point(aes(color = status), size = 2, alpha = 0.5) +
-  stat_ellipse(type = "euclid") +
-  scale_color_manual(values = c("#d0681e","#1e74d0")) +
+  stat_ellipse() +
+  scale_color_manual(values = fire_color) +
   theme_minimal()
-
-nmds_df <- 
-  as_tibble(nmds_outlier_euc$points, rownames = "sample_name") %>%
-  left_join(df_97, by = "sample_name")
 
 nmds_euc <- 
   nmds_df %>%
-  ggplot(aes(x = MDS1, y = MDS2, color = status)) + 
+  ggplot(aes(x = MDS1, y = MDS2)) +
   #geom_text(aes(label = sample_name), size = 1) +
-  geom_point(aes(color = status), size = 2, alpha = 0.5) +
-  stat_ellipse(type = "euclid") +
-  scale_color_manual(values = c("#d0681e","#1e74d0")) +
-  theme_minimal()
+  geom_point(aes(color = status, shape = status), alpha = 0.3, size = 3) +
+  stat_ellipse(aes(lty = status, color = status), alpha = 0.5, linewidth = 1) +
+  scale_color_manual(values = fire_color) +
+  theme_minimal() +
+  geom_text(x = 1.8, y = 1.0, 
+            label = paste("Stress = ", round(nmds_outlier_euc$stress, 3)), 
+            size = 3, alpha = 0.7) +
+  geom_text(x = 1.8, y = 1.15, 
+            label = "R2 = 0.013", 
+            size = 4, alpha = 0.7) +
+  geom_text(x = 1.8, y = 1.3, 
+            label = "F = 1.146", 
+            size = 4, alpha = 0.7) +
+  geom_text(x = 1.8, y = 1.45, 
+            label = "Pr = 0.158", 
+            size = 4, alpha = 0.7) +
+  labs(color = "Burn Status", 
+       shape = "Burn Status",
+       lty = "Burn Status")
+ggsave("nmds_burn.png", width = 7, height = 5, units = "in")
 
 # Dataframe for permanova
 permanova_df <-
-  df_97 %>%
+  df_filtered %>%
   group_by(sample_name) %>%
   filter(row_number() == 1) %>%
   filter(sample_name %in% rownames(as.matrix(mat_outlier_h)))
@@ -491,10 +498,39 @@ anova(betadisper(euc, permanova_df$status))
 adonis_total_hell <- adonis2(mat_outlier_h ~ year*status*habitat*reserve,
                         method = "euclidean", data = permanova_df, 
                         permutations = 1000)
+
 adonis_total_inc <- adonis2(mat_outlier_i ~ year*status*habitat*reserve,
                         method = "euclidean", data = permanova_df, 
                         permutations = 1000)
 
+nmds_year_p <- 
+  nmds_df %>%
+  mutate(year = ifelse(year == "pan2020", "Fall 2020", "Spring 2021")) %>%
+  ggplot(aes(x = MDS1, y = MDS2)) +
+  #geom_text(aes(label = sample_name), size = 1) +
+  geom_point(aes(color = year, shape = year), alpha = 0.8, size = 3) +
+  stat_ellipse(aes(color = year), alpha = 0.2, linewidth = 1) +
+  scale_shape_manual(values = c(7, 8)) +
+  scale_color_manual(values = c("#a384b3", "#41244f")) +
+  theme_minimal() +
+  geom_text(x = 1.8, y = 1.0, 
+            label = paste("Stress = ", round(nmds_outlier_euc$stress, 3)), 
+            size = 3, alpha = 0.7) +
+  geom_text(x = 1.8, y = 1.15, 
+            label = "R2 = 0.034", 
+            size = 4, alpha = 0.7) +
+  geom_text(x = 1.8, y = 1.3, 
+            label = "F = 2.895", 
+            size = 4, alpha = 0.7) +
+  geom_text(x = 1.8, y = 1.45, 
+            label = "Pr < 0.0001***", 
+            size = 4, alpha = 0.7) +
+  labs(color = "Season", 
+       shape = "Season")
+ggsave("nmds_season.png", width = 7, height = 5, units = "in")
+
+
+  round(nmds_outlier_euc$stress, 3)
 ```
 
 Distances
@@ -556,8 +592,12 @@ beta_all <- rbind(beta_total,
                   beta_rich) %>%
   rename(site1 = site_name.x,
          site2 = site_name.y) %>%
+    mutate(comparison = case_when(
+    status.x == status.y & status.x == "Unburn" ~ "Unburned",
+    status.x == status.y & status.x == "Burn" ~ "Burned",
+    TRUE ~ "Between"
+  )) %>%
   left_join(distances, by = c("site1", "site2"))
-
 
 within <- beta_all %>%
   filter(reserve.x == reserve.y
@@ -569,40 +609,87 @@ btwn <- beta_all %>%
          & habitat.x == habitat.y 
          & year.x == year.y)
 
-within %>%
+beta_dist_plot <- 
+  within %>%
+  #filter(beta_type != "total") %>%
+  filter(comparison == "Between") %>%
   filter(distance < 6000) %>%
+  mutate(year.x = ifelse(year.x == "pan2020", "Fall", "Spring")) %>%
   ggplot(aes(distance, value)) +
-  geom_point(aes(color = beta_type)) +
-  geom_smooth(aes(color = beta_type), method = "lm") + 
+  geom_point(aes(color = year.x, shape = beta_type, size = beta_type), 
+             alpha = 0.5) +
+  geom_smooth(aes(lty = beta_type, color = year.x), method = "lm", 
+              alpha = 0.1)  +
   facet_grid(~year.x) +
-  theme_minimal()
+  xlab("Distance (km)") +
+  ylab("Beta Diversity") +
+  labs(color = "Season",
+       shape = "Beta Components",
+       lty = "Beta Components",
+       size = "Beta Components") + 
+  #scale_shape_manual(values = c(7, 8)) +
+  scale_color_manual(values = c("#a384b3", "#41244f")) +
+  scale_size_manual(values = c(2, 2.5, 1)) +
+  scale_linetype_manual(values = c("dotted", "longdash", "solid")) +
+  #(~comparison) +
+  theme_minimal() 
 
-btwn %>%
-  ggplot(aes(distance, value)) +
-  geom_jitter(aes(color = beta_type)) +
-  geom_smooth(aes(color = beta_type), method = "lm") +
-  facet_wrap(~year.x) +
-  facet_grid(habitat.x~year.x)
+df_distance <- within %>%
+  #filter(beta_type != "total") %>%
+  filter(comparison == "Between") %>%
+  filter(distance < 6000) 
 
+lm1 <- lm(df_distance$value[df_distance$beta_type == "total" & df_distance$year.x == "pan2020"] ~ df_distance$distance[df_distance$beta_type == "total" & df_distance$year.x == "pan2020"])
+summary(lm1) #   0.031
+
+
+lm2 <- lm(df_distance$value[df_distance$beta_type == "total" & df_distance$year.x == "pan2021"] ~ df_distance$distance[df_distance$beta_type == "total" & df_distance$year.x == "pan2021"])
+summary(lm2) 
+hist(lm1$residuals)
+
+
+lm3 <- lm(df_distance$value[df_distance$beta_type == "lossgain" & df_distance$year.x == "pan2020"] ~ df_distance$distance[df_distance$beta_type == "lossgain" & df_distance$year.x == "pan2020"])
+summary(lm3)
+lm4 <- lm(df_distance$value[df_distance$beta_type == "lossgain" & df_distance$year.x == "pan2021"] ~ df_distance$distance[df_distance$beta_type == "lossgain" & df_distance$year.x == "pan2021"])
+summary(lm4) # 0.051
+hist(lm4$residuals)
+
+
+lm5 <- lm(df_distance$value[df_distance$beta_type == "replacement" & df_distance$year.x == "pan2020"] ~ df_distance$distance[df_distance$beta_type == "replacement" & df_distance$year.x == "pan2020"])
+summary(lm5) # 0.0345
+
+lm6 <- lm(df_distance$value[df_distance$beta_type == "replacement" & df_distance$year.x == "pan2021"] ~ df_distance$distance[df_distance$beta_type == "replacement" & df_distance$year.x == "pan2021"])
+summary(lm6)
 ```
 
-Hypothesis 3: Burn / unburn will become more compositionally similar from fall to spring - recovery (data combined)
+Hypothesis 3: Burn / unburn will become more computationally similar from fall to spring - recovery (data combined)
 ```{r between site differences}
 
 beta_narrowed <-
   beta_total %>%
   filter(reserve.x == reserve.y &
          habitat.x == habitat.y &
-         year.x == year.y) %>%
+           year.x == year.y) %>%
   mutate(comparison = case_when(
     status.x == status.y & status.x == "Unburn" ~ "Unburned",
     status.x == status.y & status.x == "Burn" ~ "Burned",
-    TRUE ~ "Between"
-  ))
+    TRUE ~ "Between"))
+
+beta_narrowed %>%
+  ggplot(aes(comparison, value)) +
+  geom_boxplot(aes(fill = year.x)) +
+  geom_jitter(alpha = 0.1) +
+  theme_minimal()
   
+kruskal.test(beta_narrowed$value ~ beta_narrowed$comparison) #  p-value = 0.1365
+
+# Summary
+beta_narrowed %>%
+  group_by(comparison) %>%
+  summarise(median(value),
+            mean(value))
 year_box <- 
   beta_narrowed %>%
-  filter(comparison == "Between") %>%
   ggplot(aes(as.factor(year.x), value)) +
   geom_boxplot(aes(fill = as.factor(year.x)), alpha = 0.5) +
   geom_jitter(aes(fill = as.factor(year.x)), alpha = 0.3) +
@@ -653,23 +740,24 @@ grass_df <-
 grass_2020 <- 
   grass_df %>%
   ggplot(aes(x = MDS1, y = MDS2, color = status)) + 
-  geom_text(aes(label = sample_name), size = 1) +
+  #geom_text(aes(label = sample_name), size = 1) +
   geom_point(aes(shape = status), size = 2) +
-  stat_ellipse(type = "euclid") +
+  stat_ellipse(aes(lty = status), alpha = 0.5) +
+  scale_color_manual(values = fire_color) +
   theme_minimal() 
 
 # Distance matrix
 grass_dist <- vegdist(hell_grass)
 
 # PERMANOVA / PERMDISP
-perm_2020 <- adonis2(grass_dist~status, 
+perm_2020_grass <- adonis2(grass_dist~status, 
         sites[sites$sample_name %in% rownames(hell_grass),], 
         permutations = 1000)
-anosim(hell_grass, distance = "euclidean",
+ano_2020_grass <- anosim(hell_grass, distance = "euclidean",
        grouping = sites[sites$sample_name %in% rownames(hell_grass),]$status, 
        permutations = 1000)
 
-dispr_2020 <- anova(betadisper(grass_dist, 
+dispr_2020_grass <- anova(betadisper(grass_dist, 
                  sites$status[sites$sample_name %in% rownames(hell_grass)]))
 
 ## 2021 ##
@@ -704,25 +792,25 @@ grass_df <-
 grass_2021 <- 
   grass_df %>%
   ggplot(aes(x = MDS1, y = MDS2, color = status)) + 
-  geom_text(aes(label = sample_name), size = 1) +
+  # geom_text(aes(label = sample_name), size = 1) +
   geom_point(aes(shape = status), size = 2) +
-  stat_ellipse(type = "euclid") +
+  stat_ellipse(aes(lty = status), alpha = 0.5) +
+  scale_color_manual(values = fire_color) +
   theme_minimal() 
 
 # Distance matrix
 grass_dist <- vegdist(hell_grass)
 
 # PERMANOVA / PERMDISP
-perm_2021 <- adonis2(grass_dist~status, 
+perm_2021_grass <- adonis2(grass_dist~status, 
         sites[sites$sample_name %in% rownames(hell_grass),], 
         permutations = 1000)
-anosim(hell_grass, distance = "euclidean",
+ano_2021_Grass <- anosim(hell_grass, distance = "euclidean",
        grouping = sites[sites$sample_name %in% rownames(hell_grass),]$status, 
        permutations = 1000)
-dispr_2021 <- anova(betadisper(grass_dist, 
+dispr_2021_grass <- anova(betadisper(grass_dist, 
                  sites$status[sites$sample_name %in% rownames(hell_grass)]))
 
-grass_nmds <- ggpubr::ggarrange(grass_2020, grass_2021)
 
 # Richness
 
@@ -754,7 +842,7 @@ beta_all %>%
 site <- sites
 
 # pan2021_HT_G01_Burn, pan2021_AN_G05_Burn, pan2020_ML_G01_Burn
-scrub_out <- c( "pan2020_AN_S01_Burn", "pan2020_AN_S01_Unburn")
+scrub_out <- c( "pan2020_AN_S01_Burn")
 
 ## 2020 ##
 # Matrix
@@ -775,7 +863,7 @@ set.seed(1)
 scrub_mds_inc <- metaMDS(inc_scrub, distance = "jaccard", trymax = 1000, 
                          k = 2, noshare = TRUE)
 scrub_mds_hell <- metaMDS(hell_scrub, distance = "euclidean", trymax = 1000, 
-                          k = 2)
+                          k = 2, noshare = TRUE)
 
 # Plot
 scrub_df <- 
@@ -785,16 +873,17 @@ scrub_df <-
 scrub_2020 <- 
   scrub_df %>%
   ggplot(aes(x = MDS1, y = MDS2, color = status)) + 
-  geom_text(aes(label = sample_name), size = 1) +
+  # geom_text(aes(label = sample_name), size = 1) +
   geom_point(aes(shape = status), size = 2) +
-  stat_ellipse(type = "euclid") +
+  stat_ellipse(aes(lty = status), alpha = 0.4) +
+  scale_color_manual(values = fire_color) +
   theme_minimal() 
 
 # Distance matrix
 scrub_dist <- vegdist(hell_scrub)
 
 # PERMANOVA / PERMDISP
-perm_2020 <- adonis2(scrub_dist~status, 
+perm_2020_scrub <- adonis2(scrub_dist~status, 
         site[site$sample_name %in% rownames(hell_scrub),], 
         permutations = 1000)
 ano_2020 <- anosim(hell_scrub, distance = "euclidean",
@@ -804,7 +893,7 @@ dispr_2020 <- anova(betadisper(scrub_dist,
                  site$status[site$sample_name %in% rownames(hell_scrub)]))
 
 ## 2021 ##
-scrub_out <- c( "pan2021_BC_S01_Unburn")
+scrub_out <- c("pan2021_BC_S01_Unburn")
 
 # Matrix
 inc_scrub <- subset(dinc_mat, rownames(dinc_mat) %in% 
@@ -834,16 +923,16 @@ scrub_df <-
 scrub_2021 <- 
   scrub_df %>%
   ggplot(aes(x = MDS1, y = MDS2, color = status)) + 
-  geom_text(aes(label = sample_name), size = 1) +
   geom_point(aes(shape = status), size = 2) +
-  stat_ellipse(type = "euclid") +
+  stat_ellipse(aes(lty = status), alpha = 0.4) +
+  scale_color_manual(values = fire_color) +
   theme_minimal() 
 
 # Distance matrix
 scrub_dist <- vegdist(hell_scrub)
 
 # PERMANOVA / PERMDISP
-perm_2021 <- adonis2(scrub_dist~status, 
+perm_2021_scrub <- adonis2(scrub_dist~status, 
         site[site$sample_name %in% rownames(hell_scrub),], 
         permutations = 1000)
 ano_2021 <- anosim(hell_scrub, distance = "euclidean",
@@ -852,7 +941,9 @@ ano_2021 <- anosim(hell_scrub, distance = "euclidean",
 dispr_2021 <- anova(betadisper(scrub_dist, 
                  site$status[site$sample_name %in% rownames(hell_scrub)]))
 
-scrub <- ggpubr::ggarrange(scrub_2020, scrub_2021)
+scrub <- ggpubr::ggarrange(scrub_2020, scrub_2021, 
+                           labels = c("Fall 2020", "Spring 2021"),
+                           common.legend = TRUE)
 ```
 
 ```{r oak nmds/permanova}
@@ -884,15 +975,15 @@ oak_mds_hell <- metaMDS(hell_oak, distance = "euclidean", trymax = 100,
 
 # Plot
 oak_df <- 
-  as_tibble(oak_mds_inc$points, rownames = "sample_name") %>%
+  as_tibble(oak_mds_hell$points, rownames = "sample_name") %>%
   left_join(site, by = "sample_name") 
 
 oak_2020 <- 
   oak_df %>%
   ggplot(aes(x = MDS1, y = MDS2, color = status)) + 
-  geom_text(aes(label = sample_name), size = 1) +
   geom_point(aes(shape = status), size = 2) +
-  stat_ellipse(type = "euclid") +
+  stat_ellipse(aes(lty = status), alpha = 0.4) +
+  scale_color_manual(values = fire_color) +
   theme_minimal() 
 
 # Distance matrix
@@ -917,7 +1008,7 @@ hell_oak <- subset(dhell_mat, rownames(dhell_mat) %in%
                         site$sample_name[site$habitat == "Oak Woodland"
                                          & site$year == "pan2021"])
 hell_oak <- as.matrix(hell_oak[,colSums(hell_oak) != 0])
-hell_oak <- subset(hell_oak, !rownames(hell_oak) %in% oak_out)
+hell_oak <- subset(hell_oak, !rownames(hell_oak) %in% "pan2021_BO_O03_Burn")
 
 # Ordination
 set.seed(1)
@@ -928,15 +1019,15 @@ oak_mds_hell <- metaMDS(hell_oak, distance = "euclidean", trymax = 100,
 
 # Plot
 oak_df <- 
-  as_tibble(oak_mds_inc$points, rownames = "sample_name") %>%
+  as_tibble(oak_mds_hell$points, rownames = "sample_name") %>%
   left_join(site, by = "sample_name") 
 
 oak_2021 <- 
   oak_df %>%
   ggplot(aes(x = MDS1, y = MDS2, color = status)) + 
-  geom_text(aes(label = sample_name), size = 1) +
   geom_point(aes(shape = status), size = 2) +
-  stat_ellipse(type = "euclid") +
+  stat_ellipse(aes(lty = status), alpha = 0.4) +
+  scale_color_manual(values = fire_color) +
   theme_minimal() 
 
 # Distance matrix
@@ -949,28 +1040,98 @@ perm_2021 <- adonis2(oak_dist~status,
 dispr_2021 <- anova(betadisper(oak_dist, 
                  site$status[site$sample_name %in% rownames(hell_oak)]))
 
-ggpubr::ggarrange(oak_2020, oak_2021)
+oak_nmds <- ggpubr::ggarrange(oak_2020, oak_2021, 
+                  common.legend = TRUE, 
+                  labels = c("Fall 2020", "Spring 2021"))
+
+
+```
+
+```{r total NMDS}
+grass_nmds <- ggpubr::ggarrange(grass_2020, grass_2021, 
+                                oak_2020, oak_2021,
+                                scrub_2020, scrub_2021,
+                                ncol = 2, nrow = 3,
+                                common.legend = TRUE)
+
 ```
 
 ```{r beta diversity by habitat}
-hab_beta <- 
-  beta_total %>%
-  filter(habitat.x %in% 
-           c("Scrub", "Grassland", "Oak Woodland")) %>%
-  filter(habitat.x == habitat.y,
-         year.x == year.y) %>%
-  mutate(comparison = case_when(
-    status.x == status.y & status.x == "Burn" ~ "Burn",
-    status.x == status.y & status.x == "Unburn" ~ "Unburn",
-    TRUE ~ "Between"
-  )) 
+hab_beta <-
+  beta_narrowed %>%
+  #filter(comparison == "Between") %>%
+  ggplot(aes(comparison, value)) +
+  geom_boxplot(aes(fill = habitat.x), alpha = 0.8) +
+  geom_jitter(aes(shape = comparison), alpha = 0.3) +
+  facet_grid(~habitat.x) +
+  scale_color_manual(values = fire_color) +
+  scale_fill_manual(values = habitat) +
+  labs(fill = "Habitat", 
+       shape = "Burn Status") +
+  xlab("") +
+  ylab("Beta Diversity") +
+  theme_minimal() +
+  theme(axis.text.x = element_text(size = 6, angle = 45),
+        legend.key.size = unit(0.75, "lines"),
+        legend.text = element_text(size = 6))
+ggsave("hab_beta.png", width = 6, height = 3.5, units = "in")
 
 beta_narrowed %>%
-  filter(habitat.x != "Chamise") %>%
-  ggplot(aes(status.x, value)) +
-  geom_boxplot(aes(fill = status.x)) +
-  geom_jitter(alpha = 0.3) +
-  facet_grid(~habitat.x) +
+  group_by(comparison, habitat.x) %>%
+  summarise(median(value),
+            mean(value))
+
+
+hab_beta_between <- beta_narrowed %>% filter(comparison == "Between")
+
+kruskal.test(hab_beta_between$value ~ hab_beta_between$habitat.x)
+
+kruskal.test(hab_beta_between$value ~ hab_beta_between$year.x)
+
+kruskal.test(hab_beta_between$value[hab_beta_between$habitat.x == "Scrub"] ~ hab_beta_between$year.x[hab_beta_between$habitat.x == "Scrub"]) # 0.059
+
+kruskal.test(hab_beta_between$value[hab_beta_between$habitat.x == "Grassland"] ~ hab_beta_between$year.x[hab_beta_between$habitat.x == "Grassland"]) # 0.07495
+
+kruskal.test(hab_beta_between$value[hab_beta_between$habitat.x == "Oak Woodland"] ~ hab_beta_between$year.x[hab_beta_between$habitat.x == "Oak Woodland"]) # 0.07495
+
+beta_reserve_diff <- 
+  beta_total %>%
+  mutate(comparison = case_when(
+    status.x == status.y & status.x == "Unburn" ~ "Unburned",
+    status.x == status.y & status.x == "Burn" ~ "Burned",
+    TRUE ~ "Between")) %>%
+  filter(beta_type == "total") %>%
+  filter(habitat.x == habitat.y &
+           reserve.x != reserve.y) 
+
+beta_reserve_diff %>%
+  ggplot(aes(comparison, value)) +
+  geom_boxplot() +
+  geom_jitter(alpha = 0.2) +
+  facet_grid(~habitat.x)
+
+kruskal.test(beta_reserve_diff$value[beta_reserve_diff$habitat.x == "Scrub"] ~ beta_reserve_diff$comparison[beta_reserve_diff$habitat.x == "Scrub"])
+
+kruskal.test(beta_reserve_diff$value[beta_reserve_diff$habitat.x == "Grassland"] ~ beta_reserve_diff$comparison[beta_reserve_diff$habitat.x == "Grassland"])
+
+kruskal.test(beta_reserve_diff$value[beta_reserve_diff$habitat.x == "Oak Woodland"] ~ beta_reserve_diff$comparison[beta_reserve_diff$habitat.x == "Oak Woodland"])
+
+
+beta_all %>%
+  filter(habitat.x == habitat.y,
+         reserve.x == reserve.y) %>%
+  mutate(comparison = case_when(
+    status.x == status.y & status.x == "Unburn" ~ "Unburned",
+    status.x == status.y & status.x == "Burn" ~ "Burned",
+    TRUE ~ "Between")) %>%
+  #filter(beta_type == "total") %>%
+  filter(distance < 6000) %>%
+  ggplot(aes(distance, value)) +
+  geom_point(aes(color = beta_type)) +
+  geom_smooth(aes(color = beta_type), method = "lm", alpha = 0.1) +
+  facet_grid(comparison~habitat.x) +
   theme_minimal()
+
+
 
 ```
