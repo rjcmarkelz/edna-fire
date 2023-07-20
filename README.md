@@ -1,5 +1,4 @@
 # Owners - Anna Holmquist
-# license - 
 
 This directory accompanies the pre-print "The importance of habitat type and historical fire regimes in arthropod community response following large-scale wildfires" by Anna J. Holmquist, R.J. Cody Markelz, Ciera C. Martinez, Rosemary G. Gillespie . doi: https://doi.org/10.1101/2023.07.17.548903 Available [here](https://www.biorxiv.org/content/10.1101/2023.07.17.548903v1)
 
