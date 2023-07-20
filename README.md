@@ -1,44 +1,38 @@
 # Owners - Anna Holmquist
-# license
-# edna fire project directory
+# license - 
 
+This directory accompanies the pre-print "The importance of habitat type and historical fire regimes in arthropod community response following large-scale wildfires" by Anna J. Holmquist, R.J. Cody Markelz, Ciera C. Martinez, Rosemary G. Gillespie . doi: https://doi.org/10.1101/2023.07.17.548903 Available [here](https://www.biorxiv.org/content/10.1101/2023.07.17.548903v1)
+
+We describe two docker containers below to run the data processing, analysis and statistical tests code in this repository. The data processing using easy to build containers with few dependencies. The analysis and statistics portion uses a larger container with many packages and dependencies. The analysis container is available
+on Docker Hub [here](https://hub.docker.com/r/codymarkelz/holmquist-etal-edna-fire-paper). The code to rebuild both containers (mostly installing R packages and dependencies) is also provided below. 
+
+```bash
+docker pull codymarkelz/holmquist-etal-edna-fire-paper
+```
+
+# edna fire project directory
 ## /scripts
 
 To run the following scripts:
 dada2_bf3.Rmd
 dada2_mco.Rmd
 
-Change the path to match your directory path for where the data is located.
+Change the path to match your directory where the data is located. See how to make the "biocontainers_dada2_tidyverse" container below using the biocontainers dada2 base.
+
 ```bash
-docker run -it -v /Users/rjcmarkelz/Documents/Projects/THINK/git.repos/BIDS/DATA/Fire_Raw:/DATA/ biocontainers_dada2_tidyverse /bin/bash
+docker run -it -v /PATH/TO/DIRECTORY:/DATA/ biocontainers_dada2_tidyverse /bin/bash
 ```
+
+---
 
 To run the following scripts:
 fire_cleanup.Rmd
-
-Change the path to match your directory path for where the data is located.
-```bash
-docker run -it -v /Users/rjcmarkelz/Documents/Projects/THINK/git.repos/BIDS/DATA/Fire_Raw:/DATA/ rocker_geospatial_tidyverse_ape_vegan_bat_lulu /bin/bash
-```
-
-To run the following scripts:
 fire_analysis.Rmd
 
-Change the path to match your directory path for where the data is located.
-<!-- # ```bash
-# docker run -it -v -p 8787:8787 -e PASSWORD=YOURNEWPASSWORD /Users/rjcmarkelz/Documents/Projects/THINK/git.repos/BIDS/edna-fire:/DATA/ rocker_geospatial_tidyverse_ape_vegan_bat_lulu /bin/bash
-# ```
-
-# ```bash
-# docker run --rm -v -p 8787:8787 -e PASSWORD=YOURNEWPASSWORD /Users/rjcmarkelz/Documents/Projects/THINK/git.repos/BIDS/edna-fire:/DATA/ rocker_geospatial_tidyverse_ape_vegan_bat_lulu
-# ``` -->
-<!-- ```bash
-docker run --rm -p 8787:8787 -e PASSWORD=YOURNEWPASSWORD -v /Users/rjcmarkelz/Documents/Projects/THINK/git.repos/BIDS/edna-fire:/home/rstudio/DATA rocker_rstudio_tidy_devtools
-``` -->
-
+Change the path to match your directory path for where the data is located. Use our pre-built container, or follow the instructions below to install all the dependencies. 
 
 ```bash
-docker run --rm -p 8787:8787 -e PASSWORD=YOURNEWPASSWORD -v /Users/rjcmarkelz/Documents/Projects/THINK/git.repos/BIDS/edna-fire:/home/rstudio/DATA  rocker_geospatial_fire_edna
+docker run --rm -p 8787:8787 -e PASSWORD=YOURNEWPASSWORD -v /PATH/TO/DIRECTORY:/home/rstudio/DATA  codymarkelz/holmquist-etal-edna-fire-paper
 ```
 
 Browser:
@@ -60,9 +54,10 @@ directory to save intermediary files and output
 directory for figure drafts and final figures
 
 
-##################
+---
+
 # Docker Pipeline
-###################
+
 
 Download base container.
 ```bash
@@ -123,14 +118,8 @@ docker images biocontainers_dada2_tidyverse
 # biocontainers_dada2_tidyverse   latest    c1f8a711f890   6 minutes ago   1.18GB
 ```
 
-Download base container.
-```bash
-docker pull quay.io/biocontainers/bioconductor-dada2:1.22.0--r41h619a076_1
-docker run -it quay.io/biocontainers/bioconductor-dada2:1.22.0--r41h619a076_1 /bin/bash
-```
 
-
-Download base container.
+Download base containers.
 ```bash
 docker pull rocker/tidyverse
 docker run -it rocker/tidyverse /bin/bash
@@ -249,15 +238,9 @@ Outside of container.
 ```bash
 # docker container ID with the newly installed packages
 docker ps
-# REPOSITORY                                       TAG                     IMAGE ID       CREATED          SIZE
-# rocker_geospatial_tidyverse_ape_vegan_bat_lulu   latest                  c51e0fa4391c   29 seconds ago   5.15GB
 docker commit -m "rocker_geospatial_fire_edna" 51b493fcf9c8 rocker_geospatial_fire_edna
 docker image ls
+docker tag 1a9b7c7945d1 codymarkelz/holmquist-etal-edna-fire-paper:pre-print
+docker push codymarkelz/holmquist-etal-edna-fire-paper:pre-print
 ```
 
-Download base container.
-```bash
-docker pull ncbi/blast
-
-docker run -it -v /Users/rjcmarkelz/Documents/Projects/THINK/git.repos/BIDS/DATA/Fire_Raw:/DATA/ ncbi/blast /bin/bash
-```
